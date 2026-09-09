@@ -1,51 +1,172 @@
 package com.example.bookapp.data
 
 import android.content.Context
-import android.content.Intent
-import androidx.core.content.FileProvider
-import java.io.File
+import android.net.Uri
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * خروجی گرفتن از یادداشت‌ها و علاقه‌مندی‌ها در یک فایل متنی ساده،
- * و اشتراک‌گذاری آن (مثلاً ذخیره در گوگل‌درایو یا ارسال به خود).
+ * پشتیبان‌گیری کامل (JSON، قابل بازیابی) از همه‌ی چیزهایی که کاربر خودش در برنامه
+ * ساخته: یادداشت‌ها، علاقه‌مندی‌ها (بوکمارک)، پاورقی‌ها، نقش‌های «من»، و گفتگوها.
+ *
+ * چون از Storage Access Framework اندروید (ACTION_CREATE_DOCUMENT / ACTION_OPEN_DOCUMENT)
+ * استفاده می‌شود، کاربر از همان پنجره‌ی انتخاب مسیر سیستم می‌تواند هم یک سرویس ابری
+ * (گوگل‌درایو و مشابه، اگر روی گوشی نصب باشد) و هم حافظه‌ی داخلی/خارجی گوشی (کارت
+ * حافظه، پوشه‌ی Downloads) را انتخاب کند - نیازی به اتصال به یک سرویس ابری خاص نیست.
+ *
+ * نکته: خود فایل‌های تصویر (عکس‌های گالری هر تعزیه) در این نسخه از پشتیبان شامل
+ * نمی‌شوند (فقط توضیح/مسیرشان)، چون حجم آن‌ها می‌تواند بزرگ باشد؛ اگر لازم شد
+ * می‌توان بعداً پشتیبان‌گیری از خود فایل‌های تصویر را هم اضافه کرد.
  */
-suspend fun exportBackup(context: Context, db: AppDatabase) {
-    val notes = db.noteDao().getAll()
-    val bookmarkIds = Prefs.getBookmarks(context).toList()
-    val bookmarks = if (bookmarkIds.isNotEmpty()) db.searchDao().getByIds(bookmarkIds) else emptyList()
+suspend fun buildBackupJson(context: Context, db: AppDatabase): String {
+    val root = JSONObject()
+    root.put("app", "taziehapp")
+    root.put("backupVersion", 1)
 
-    val sb = StringBuilder()
-    sb.appendLine("پشتیبان یادداشت‌ها و علاقه‌مندی‌های اپ تعزیه و شبیه‌خوانی")
-    sb.appendLine("==========================================")
-    sb.appendLine()
-    sb.appendLine("--- یادداشت‌ها ---")
-    if (notes.isEmpty()) {
-        sb.appendLine("(یادداشتی ثبت نشده)")
-    } else {
-        notes.forEach {
-            sb.appendLine("* ${it.title}")
-            sb.appendLine(it.content)
-            sb.appendLine()
+    val notesArr = JSONArray()
+    db.noteDao().getAll().forEach { note ->
+        notesArr.put(JSONObject().apply {
+            put("title", note.title)
+            put("content", note.content)
+        })
+    }
+    root.put("notes", notesArr)
+
+    val bookmarksArr = JSONArray()
+    Prefs.getBookmarks(context).forEach { bookmarksArr.put(it) }
+    root.put("bookmarks", bookmarksArr)
+
+    val footnotesArr = JSONArray()
+    // برای همه‌ی بخش‌ها پاورقی‌ها را جمع می‌کنیم (فقط بخش‌هایی که واقعاً پاورقی دارند)
+    db.fieldDao().getAll().forEach { field ->
+        db.taziehDao().getByField(field.id).forEach { tazieh ->
+            db.roleDao().getByTazieh(tazieh.id).forEach { role ->
+                db.sectionDao().getByRole(role.id).forEach { section ->
+                    db.footnoteDao().getBySection(section.id).forEach { fn ->
+                        footnotesArr.put(JSONObject().apply {
+                            put("sectionId", fn.sectionId)
+                            put("term", fn.term)
+                            put("explanation", fn.explanation)
+                        })
+                    }
+                }
+            }
         }
     }
-    sb.appendLine()
-    sb.appendLine("--- علاقه‌مندی‌ها ---")
-    if (bookmarks.isEmpty()) {
-        sb.appendLine("(موردی نشان نشده)")
-    } else {
-        bookmarks.forEach {
-            sb.appendLine("* ${it.sectionTitle} (${it.fieldTitle} ← ${it.taziehTitle} ← ${it.roleTitle})")
+    root.put("footnotes", footnotesArr)
+
+    val myRolesArr = JSONArray()
+    Prefs.getAllMyRoles(context).forEach { (taziehId, roleId) ->
+        myRolesArr.put(JSONObject().apply {
+            put("taziehId", taziehId)
+            put("roleId", roleId)
+        })
+    }
+    root.put("myRoles", myRolesArr)
+
+    val dialoguesArr = JSONArray()
+    db.fieldDao().getAll().forEach { field ->
+        db.taziehDao().getByField(field.id).forEach { tazieh ->
+            db.dialogueDao().getByTazieh(tazieh.id).forEach { dialogue ->
+                val turnsArr = JSONArray()
+                db.dialogueTurnDao().getByDialogue(dialogue.id).forEach { turn ->
+                    turnsArr.put(JSONObject().apply {
+                        put("sectionId", turn.sectionId)
+                        put("orderIndex", turn.orderIndex)
+                    })
+                }
+                dialoguesArr.put(JSONObject().apply {
+                    put("taziehId", dialogue.taziehId)
+                    put("title", dialogue.title)
+                    put("turns", turnsArr)
+                })
+            }
         }
     }
+    root.put("dialogues", dialoguesArr)
 
-    val file = File(context.cacheDir, "پشتیبان-تعزیه.txt")
-    file.writeText(sb.toString(), Charsets.UTF_8)
+    return root.toString(2)
+}
 
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+/** فایل پشتیبان JSON را در مسیری که کاربر انتخاب کرده (ابری یا حافظه گوشی) می‌نویسد */
+suspend fun writeBackupToUri(context: Context, db: AppDatabase, uri: Uri) {
+    val json = buildBackupJson(context, db)
+    context.contentResolver.openOutputStream(uri)?.use { out ->
+        out.write(json.toByteArray(Charsets.UTF_8))
     }
-    context.startActivity(Intent.createChooser(intent, "ذخیره یا اشتراک‌گذاری پشتیبان"))
+}
+
+/**
+ * پشتیبان JSON را از مسیر انتخابی کاربر می‌خواند و همه‌چیز را بازیابی می‌کند.
+ * این عملیات افزودنی است (مثل بقیه‌ی برنامه) نه جایگزینی؛ چیزی که همین الان
+ * روی گوشی هست پاک نمی‌شود، فقط موارد داخل فایل پشتیبان اضافه/به‌روزرسانی می‌شوند.
+ *
+ * این عملیات idempotent است: اگر کاربر یک فایل پشتیبان را چند بار Restore کند
+ * (مثلاً به‌اشتباه دوبار دکمه را بزند، یا بخواهد مطمئن شود پشتیبان درست بازیابی
+ * شده)، هیچ رکورد تکراری ساخته نمی‌شود. برای بوکمارک‌ها و نقش‌های «من» این طبیعتاً
+ * برقرار است (کلید-مقدار)؛ برای یادداشت/پاورقی/گفتگو پیش از درج، وجود رکورد
+ * مشابه را چک می‌کنیم.
+ */
+suspend fun restoreBackupFromUri(context: Context, db: AppDatabase, uri: Uri): Result<Unit> {
+    return try {
+        val text = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+            ?: return Result.failure(IllegalStateException("فایل خوانده نشد"))
+        val root = JSONObject(text)
+
+        val notesArr = root.optJSONArray("notes") ?: JSONArray()
+        for (i in 0 until notesArr.length()) {
+            val o = notesArr.getJSONObject(i)
+            val title = o.getString("title")
+            val content = o.getString("content")
+            if (db.noteDao().countMatching(title, content) == 0) {
+                db.noteDao().insert(NoteEntity(title = title, content = content))
+            }
+        }
+
+        val bookmarksArr = root.optJSONArray("bookmarks") ?: JSONArray()
+        for (i in 0 until bookmarksArr.length()) {
+            val sectionId = bookmarksArr.getLong(i)
+            if (!Prefs.isBookmarked(context, sectionId)) Prefs.toggleBookmark(context, sectionId)
+        }
+
+        val footnotesArr = root.optJSONArray("footnotes") ?: JSONArray()
+        for (i in 0 until footnotesArr.length()) {
+            val o = footnotesArr.getJSONObject(i)
+            val sectionId = o.getLong("sectionId")
+            val term = o.getString("term")
+            val explanation = o.getString("explanation")
+            if (db.footnoteDao().countMatching(sectionId, term, explanation) == 0) {
+                db.footnoteDao().insert(FootnoteEntity(sectionId = sectionId, term = term, explanation = explanation))
+            }
+        }
+
+        val myRolesArr = root.optJSONArray("myRoles") ?: JSONArray()
+        for (i in 0 until myRolesArr.length()) {
+            val o = myRolesArr.getJSONObject(i)
+            Prefs.setMyRole(context, o.getLong("taziehId"), o.getLong("roleId"))
+        }
+
+        val dialoguesArr = root.optJSONArray("dialogues") ?: JSONArray()
+        for (i in 0 until dialoguesArr.length()) {
+            val o = dialoguesArr.getJSONObject(i)
+            val taziehId = o.getLong("taziehId")
+            val title = o.getString("title")
+            // اگر گفتگویی با همین نام از قبل روی همین تعزیه وجود دارد، یعنی این
+            // گفتگو (همراه با تمام نوبت‌هایش) قبلاً از یک Restore قبلی ساخته شده؛
+            // از ساخت دوباره‌ی خودِ گفتگو و همه‌ی نوبت‌هایش صرف‌نظر می‌کنیم
+            if (db.dialogueDao().getByTitle(taziehId, title) != null) continue
+            val dialogueId = db.dialogueDao().insert(DialogueEntity(taziehId = taziehId, title = title))
+            val turnsArr = o.getJSONArray("turns")
+            for (j in 0 until turnsArr.length()) {
+                val t = turnsArr.getJSONObject(j)
+                db.dialogueTurnDao().insert(
+                    DialogueTurnEntity(dialogueId = dialogueId, sectionId = t.getLong("sectionId"), orderIndex = t.getInt("orderIndex"))
+                )
+            }
+        }
+
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 }

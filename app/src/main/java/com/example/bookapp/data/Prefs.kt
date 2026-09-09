@@ -113,4 +113,173 @@ object Prefs {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(KEY_FONT_CHOICE, value).apply()
     }
+
+    private const val KEY_READ_SECTIONS = "read_sections"
+    private const val KEY_LAST_READ_DAY = "last_read_day"
+    private const val KEY_STREAK_DAYS = "streak_days"
+    private const val KEY_ACTIVE_DAYS = "active_days"
+
+    /** ثبت اینکه یک بخش خوانده شده (برای آمار تعداد کل)، و به‌روزرسانی روزهای متوالی مطالعه */
+    fun markSectionRead(context: Context, sectionId: Long) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val current = prefs.getStringSet(KEY_READ_SECTIONS, emptySet())?.toMutableSet() ?: mutableSetOf()
+        current.add(sectionId.toString())
+        prefs.edit().putStringSet(KEY_READ_SECTIONS, current).apply()
+
+        val today = (System.currentTimeMillis() / 86_400_000L).toInt() // شماره روز از epoch
+        val lastDay = prefs.getInt(KEY_LAST_READ_DAY, -1)
+        val streak = prefs.getInt(KEY_STREAK_DAYS, 0)
+        when {
+            lastDay == today -> { /* همان روز، تغییری لازم نیست */ }
+            lastDay == today - 1 -> prefs.edit().putInt(KEY_STREAK_DAYS, streak + 1).putInt(KEY_LAST_READ_DAY, today).apply()
+            else -> prefs.edit().putInt(KEY_STREAK_DAYS, 1).putInt(KEY_LAST_READ_DAY, today).apply()
+        }
+
+        val activeDays = prefs.getStringSet(KEY_ACTIVE_DAYS, emptySet())?.toMutableSet() ?: mutableSetOf()
+        activeDays.add(today.toString())
+        prefs.edit().putStringSet(KEY_ACTIVE_DAYS, activeDays).apply()
+    }
+
+    /** فعال‌بودن مطالعه در N روز اخیر (برای نمودار ساده)؛ آخرین عنصر لیست همان امروز است */
+    fun getActiveDaysLast(context: Context, days: Int = 14): List<Boolean> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val activeDays = prefs.getStringSet(KEY_ACTIVE_DAYS, emptySet()) ?: emptySet()
+        val today = (System.currentTimeMillis() / 86_400_000L).toInt()
+        return (days - 1 downTo 0).map { offset -> (today - offset).toString() in activeDays }
+    }
+
+    fun getReadSectionsCount(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getStringSet(KEY_READ_SECTIONS, emptySet())?.size ?: 0
+    }
+
+    fun getStreakDays(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val today = (System.currentTimeMillis() / 86_400_000L).toInt()
+        val lastDay = prefs.getInt(KEY_LAST_READ_DAY, -1)
+        // اگر بیش از یک روز از آخرین مطالعه گذشته، زنجیره شکسته است
+        return if (lastDay == today || lastDay == today - 1) prefs.getInt(KEY_STREAK_DAYS, 0) else 0
+    }
+
+    private const val KEY_TAG_PREFIX = "tag_"
+
+    /** برچسب شخصی یک بخش (مثلاً «حفظ کنم» یا «برای مجلس بعدی») را برمی‌گرداند، یا null اگر برچسبی نداشته باشد */
+    fun getTag(context: Context, sectionId: Long): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString("$KEY_TAG_PREFIX$sectionId", null)?.takeIf { it.isNotBlank() }
+    }
+
+    fun setTag(context: Context, sectionId: Long, tag: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (tag.isBlank()) {
+            prefs.edit().remove("$KEY_TAG_PREFIX$sectionId").apply()
+        } else {
+            prefs.edit().putString("$KEY_TAG_PREFIX$sectionId", tag.trim()).apply()
+        }
+    }
+
+    private const val KEY_MY_ROLE_PREFIX = "my_role_"
+
+    /** شناسه نقشی که کاربر به‌عنوان «نقش من» برای یک تعزیه انتخاب کرده، یا null */
+    fun getMyRole(context: Context, taziehId: Long): Long? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val value = prefs.getLong("$KEY_MY_ROLE_PREFIX$taziehId", -1L)
+        return if (value == -1L) null else value
+    }
+
+    fun setMyRole(context: Context, taziehId: Long, roleId: Long) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putLong("$KEY_MY_ROLE_PREFIX$taziehId", roleId).apply()
+    }
+
+    fun clearMyRole(context: Context, taziehId: Long) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().remove("$KEY_MY_ROLE_PREFIX$taziehId").apply()
+    }
+
+    /** همه‌ی نقش‌های «من» ثبت‌شده روی این گوشی: نگاشت شناسه‌تعزیه به شناسه‌نقش */
+    fun getAllMyRoles(context: Context): Map<Long, Long> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.all
+            .filterKeys { it.startsWith(KEY_MY_ROLE_PREFIX) }
+            .mapNotNull { (key, value) ->
+                val taziehId = key.removePrefix(KEY_MY_ROLE_PREFIX).toLongOrNull()
+                val roleId = value as? Long
+                if (taziehId != null && roleId != null) taziehId to roleId else null
+            }
+            .toMap()
+    }
+
+    private const val KEY_APP_PASSWORD = "app_password"
+
+    /** رمز عبور برنامه؛ اگر خالی باشد یعنی هنوز رمزی تنظیم نشده و ورود بدون رمز آزاد است */
+    fun getAppPassword(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_APP_PASSWORD, "") ?: ""
+    }
+
+    fun setAppPassword(context: Context, newPassword: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_APP_PASSWORD, newPassword).apply()
+    }
+
+    private const val KEY_PROCESSED_CONTENT_FILES = "processed_content_files"
+
+    /** نام فایل‌های JSON محتوایی که قبلاً در دیتابیس ادغام شده‌اند */
+    fun getProcessedContentFiles(context: Context): Set<String> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getStringSet(KEY_PROCESSED_CONTENT_FILES, emptySet()) ?: emptySet()
+    }
+
+    fun addProcessedContentFiles(context: Context, fileNames: Collection<String>) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val current = getProcessedContentFiles(context).toMutableSet()
+        current.addAll(fileNames)
+        prefs.edit().putStringSet(KEY_PROCESSED_CONTENT_FILES, current).apply()
+    }
+
+    private const val KEY_LINE_SPACING = "line_spacing"
+
+    /** ضریب فاصله خطوط متن (پیش‌فرض ۱.۴)؛ برای مثال ۱.۱ فشرده، ۱.۸ بازتر */
+    fun getLineSpacing(context: Context): Float {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getFloat(KEY_LINE_SPACING, 1.4f)
+    }
+
+    fun setLineSpacing(context: Context, value: Float) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putFloat(KEY_LINE_SPACING, value).apply()
+    }
+
+    private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+
+    /** آیا صفحه گوشی حین استفاده از برنامه خاموش/قفل نشود (پیش‌فرض: فعال) */
+    fun getKeepScreenOn(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_KEEP_SCREEN_ON, true)
+    }
+
+    fun setKeepScreenOn(context: Context, value: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, value).apply()
+    }
+
+    private const val KEY_AUTO_DARK_MODE = "auto_dark_mode"
+
+    /** تاریک/روشن خودکار بر اساس ساعت گوشی (پیش‌فرض: غیرفعال، یعنی دستی) */
+    fun getAutoDarkMode(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_AUTO_DARK_MODE, false)
+    }
+
+    fun setAutoDarkMode(context: Context, value: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_AUTO_DARK_MODE, value).apply()
+    }
+
+    /** بین ساعت ۱۸ شب تا ۶ صبح، «شب» در نظر گرفته می‌شود */
+    fun isNightTimeNow(): Boolean {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return hour >= 18 || hour < 6
+    }
 }

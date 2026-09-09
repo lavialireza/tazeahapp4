@@ -11,8 +11,10 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -35,9 +37,12 @@ fun MainMenuScreen(
     onOpenSearch: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenNotes: () -> Unit,
+    onOpenGallery: () -> Unit,
+    onOpenMyRole: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenVersion: () -> Unit,
+    onOpenChangelog: () -> Unit,
     onItemClick: (SearchResult) -> Unit
 ) {
     Scaffold(
@@ -93,11 +98,17 @@ fun MainMenuScreen(
             Spacer(Modifier.height(10.dp))
             MenuCard("دفتر یادداشت", Icons.Filled.Edit, onOpenNotes)
             Spacer(Modifier.height(10.dp))
+            MenuCard("گالری تصاویر", Icons.Filled.PhotoLibrary, onOpenGallery)
+            Spacer(Modifier.height(10.dp))
+            MenuCard("نقش من", Icons.Filled.School, onOpenMyRole, accentColor = TaziehGreen)
+            Spacer(Modifier.height(10.dp))
             MenuCard("درباره برنامه", Icons.Filled.Info, onOpenAbout)
             Spacer(Modifier.height(10.dp))
             MenuCard("تنظیمات", Icons.Filled.Settings, onOpenSettings)
             Spacer(Modifier.height(10.dp))
             MenuCard("ورژن برنامه", null, onOpenVersion)
+            Spacer(Modifier.height(10.dp))
+            MenuCard("چه چیزی جدید است؟", null, onOpenChangelog)
 
             if (recentItems.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
