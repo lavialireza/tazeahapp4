@@ -28,9 +28,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.bookapp.data.AppDatabase
-import com.example.bookapp.data.NoteEntity
 import com.example.bookapp.data.Prefs
-import com.example.bookapp.data.SearchResult
 import com.example.bookapp.data.SectionEntity
 import com.example.bookapp.data.TaziehRepository
 import com.example.bookapp.data.syncLocalContentFiles
@@ -176,22 +174,15 @@ fun AppNavigation(
         }
 
         composable(ROUTE_MAIN_MENU) {
-            var randomVerse by remember { mutableStateOf<SearchResult?>(null) }
-            var recentItems by remember { mutableStateOf(listOf<SearchResult>()) }
-
-            LaunchedEffect(Unit) {
-                randomVerse = db.searchDao().getRandomSection()
-                val ids = Prefs.getRecent(context)
-                if (ids.isNotEmpty()) {
-                    val fetched = db.searchDao().getByIds(ids)
-                    val byId = fetched.associateBy { it.sectionId }
-                    recentItems = ids.mapNotNull { byId[it] }
-                }
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.MainMenuViewModel(it)
             }
+            LaunchedEffect(Unit) { vm.loadIfNeeded() }
+            val ui by vm.state.collectAsState()
 
             MainMenuScreen(
-                randomVerse = randomVerse,
-                recentItems = recentItems,
+                randomVerse = ui.randomVerse,
+                recentItems = ui.recentItems,
                 onOpenTaziehList = { navController.navigate(ROUTE_FIELDS) },
                 onOpenSearch = { navController.navigate(ROUTE_SEARCH) },
                 onOpenBookmarks = { navController.navigate(ROUTE_BOOKMARKS) },
@@ -207,126 +198,84 @@ fun AppNavigation(
         }
 
         composable(ROUTE_SEARCH) {
-            var fields by remember { mutableStateOf(listOf<com.example.bookapp.data.FieldEntity>()) }
-            var allTaziehs by remember { mutableStateOf(listOf<com.example.bookapp.data.TaziehEntity>()) }
-            var bookmarkedIds by remember { mutableStateOf(Prefs.getBookmarks(context)) }
-            LaunchedEffect(Unit) {
-                fields = db.fieldDao().getAll()
-                allTaziehs = db.taziehDao().getAll()
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.SearchViewModel(it)
             }
+            LaunchedEffect(Unit) { vm.loadIfNeeded() }
+            val ui by vm.state.collectAsState()
+
             SearchScreen(
-                fields = fields,
-                allTaziehs = allTaziehs,
-                onSearch = { query, fieldId, taziehId ->
-                    when {
-                        taziehId != null -> db.searchDao().searchInTazieh(query, taziehId)
-                        fieldId != null -> db.searchDao().searchInField(query, fieldId)
-                        else -> db.searchDao().search(query)
-                    }
-                },
+                fields = ui.fields,
+                allTaziehs = ui.allTaziehs,
+                onSearch = { query, fieldId, taziehId -> vm.search(query, fieldId, taziehId) },
                 onResultClick = { result -> navController.navigate("text/${result.sectionId}") },
-                onSearchDialogues = { query -> db.searchDao().searchDialogues(query) },
+                onSearchDialogues = { query -> vm.searchDialogues(query) },
                 onDialogueResultClick = { d -> navController.navigate("dialogue_reader/${d.dialogueId}") },
-                isBookmarked = { id -> id in bookmarkedIds },
-                onToggleBookmark = { id ->
-                    Prefs.toggleBookmark(context, id)
-                    bookmarkedIds = Prefs.getBookmarks(context)
-                },
+                isBookmarked = { id -> id in ui.bookmarkedIds },
+                onToggleBookmark = { id -> vm.toggleBookmark(id) },
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable(ROUTE_BOOKMARKS) {
-            var items by remember { mutableStateOf(listOf<SearchResult>()) }
-            LaunchedEffect(Unit) {
-                val ids = Prefs.getBookmarks(context).toList()
-                items = if (ids.isEmpty()) emptyList() else db.searchDao().getByIds(ids)
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.BookmarksViewModel(it)
             }
+            LaunchedEffect(Unit) { vm.load() }
+            val ui by vm.state.collectAsState()
+
             BookmarksScreen(
-                items = items,
+                items = ui.items,
                 onItemClick = { result -> navController.navigate("text/${result.sectionId}") },
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable(ROUTE_NOTES) {
-            var notes by remember { mutableStateOf(listOf<NoteEntity>()) }
-            val scope = androidx.compose.runtime.rememberCoroutineScope()
-            suspend fun reload() { notes = db.noteDao().getAll() }
-            LaunchedEffect(Unit) { reload() }
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.NotesViewModel(it)
+            }
+            LaunchedEffect(Unit) { vm.load() }
+            val ui by vm.state.collectAsState()
 
             NotesScreen(
-                notes = notes,
-                onAddNote = { title, content ->
-                    val note = NoteEntity(title = title, content = content)
-                    scope.launch {
-                        db.noteDao().insert(note)
-                        reload()
-                    }
-                },
-                onDeleteNote = { id ->
-                    scope.launch {
-                        db.noteDao().delete(id)
-                        reload()
-                    }
-                },
+                notes = ui.notes,
+                onAddNote = { title, content -> vm.addNote(title, content) },
+                onDeleteNote = { id -> vm.deleteNote(id) },
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable(ROUTE_MY_ROLE) {
-            var items by remember { mutableStateOf(listOf<MyRoleItem>()) }
-            val scope = androidx.compose.runtime.rememberCoroutineScope()
-
-            suspend fun reloadMyRoles() {
-                val saved = Prefs.getAllMyRoles(context)
-                items = saved.mapNotNull { (taziehId, roleId) ->
-                    val tazieh = db.taziehDao().getById(taziehId) ?: return@mapNotNull null
-                    val role = try { db.roleDao().getById(roleId) } catch (e: Exception) { null } ?: return@mapNotNull null
-                    MyRoleItem(
-                        taziehId = taziehId,
-                        taziehTitle = tazieh.title,
-                        roleId = roleId,
-                        roleTitle = role.title
-                    )
-                }
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.MyRoleViewModel(it)
             }
-            LaunchedEffect(Unit) { reloadMyRoles() }
+            LaunchedEffect(Unit) { vm.load() }
+            val ui by vm.state.collectAsState()
 
             MyRoleScreen(
-                items = items,
+                items = ui.items,
                 onRead = { item ->
                     navController.navigate("sections/${item.roleId}/${item.roleTitle}")
                 },
                 onRehearse = { item ->
                     navController.navigate("rehearsal/${item.roleId}/${item.roleTitle}")
                 },
-                onExportPdf = { item ->
-                    scope.launch {
-                        val sections = db.sectionDao().getByRole(item.roleId)
-                        com.example.bookapp.data.exportRoleToPdf(context, item.roleTitle, sections)
-                    }
-                },
-                onRemove = { item ->
-                    Prefs.clearMyRole(context, item.taziehId)
-                    scope.launch { reloadMyRoles() }
-                },
+                onExportPdf = { item -> vm.exportPdf(context, item) },
+                onRemove = { item -> vm.remove(item) },
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable(ROUTE_ALL_IMAGES) {
-            var images by remember { mutableStateOf(listOf<GalleryImageItem>()) }
-            LaunchedEffect(Unit) {
-                val taziehs = db.taziehDao().getAll()
-                images = taziehs.flatMap { tazieh ->
-                    db.taziehImageDao().getByTazieh(tazieh.id).map { img ->
-                        GalleryImageItem(img.id, img.filePath, img.caption, tazieh.title)
-                    }
-                }
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.AllImagesViewModel(it)
             }
+            LaunchedEffect(Unit) { vm.load() }
+            val ui by vm.state.collectAsState()
+
             AllImagesGalleryScreen(
-                images = images,
+                images = ui.images,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -334,36 +283,34 @@ fun AppNavigation(
         composable(ROUTE_REHEARSAL) { backStackEntry ->
             val roleId = backStackEntry.arguments?.getString("roleId")?.toLongOrNull() ?: 0L
             val roleTitle = backStackEntry.arguments?.getString("roleTitle") ?: ""
-            var sections by remember { mutableStateOf(listOf<SectionEntity>()) }
-            LaunchedEffect(roleId) {
-                sections = db.sectionDao().getByRole(roleId)
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.RehearsalViewModel(it)
             }
+            LaunchedEffect(roleId) { vm.loadIfNeeded(roleId) }
+            val ui by vm.state.collectAsState()
+
             RehearsalScreen(
                 roleTitle = roleTitle,
-                sections = sections,
+                sections = ui.sections,
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable(ROUTE_ABOUT) {
-            var fieldsCount by remember { mutableIntStateOf(0) }
-            var taziehsCount by remember { mutableIntStateOf(0) }
-            var rolesCount by remember { mutableIntStateOf(0) }
-            var sectionsCount by remember { mutableIntStateOf(0) }
-            LaunchedEffect(Unit) {
-                fieldsCount = db.searchDao().countFields()
-                taziehsCount = db.searchDao().countTaziehs()
-                rolesCount = db.searchDao().countRoles()
-                sectionsCount = db.searchDao().countSections()
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.AboutViewModel(it)
             }
+            LaunchedEffect(Unit) { vm.loadIfNeeded() }
+            val ui by vm.state.collectAsState()
+
             AboutScreen(
-                fieldsCount = fieldsCount,
-                taziehsCount = taziehsCount,
-                rolesCount = rolesCount,
-                sectionsCount = sectionsCount,
-                readCount = Prefs.getReadSectionsCount(context),
-                streakDays = Prefs.getStreakDays(context),
-                activeDaysLast14 = Prefs.getActiveDaysLast(context, 14),
+                fieldsCount = ui.fieldsCount,
+                taziehsCount = ui.taziehsCount,
+                rolesCount = ui.rolesCount,
+                sectionsCount = ui.sectionsCount,
+                readCount = ui.readCount,
+                streakDays = ui.streakDays,
+                activeDaysLast14 = ui.activeDaysLast14,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -535,54 +482,19 @@ fun AppNavigation(
         composable(ROUTE_TAZIEH_INDEX) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             val taziehTitle = backStackEntry.arguments?.getString("taziehTitle") ?: ""
-            var indexItems by remember { mutableStateOf(listOf<TaziehIndexItem>()) }
-            val scope = androidx.compose.runtime.rememberCoroutineScope()
-
-            suspend fun reloadIndex() {
-                val roles = db.roleDao().getByTazieh(taziehId)
-                indexItems = roles.map { role ->
-                    val firstSection = db.sectionDao().getByRole(role.id).firstOrNull()
-                    val firstVerse = firstSection?.content
-                        ?.lineSequence()
-                        ?.firstOrNull { it.isNotBlank() }
-                        ?.trim() ?: ""
-                    TaziehIndexItem(roleId = role.id, roleTitle = role.title, firstVerse = firstVerse)
-                }
+            val vm = com.example.bookapp.ui.viewmodel.rememberRepositoryViewModel(repository) {
+                com.example.bookapp.ui.viewmodel.TaziehIndexViewModel(it)
             }
-            LaunchedEffect(taziehId) { reloadIndex() }
+            LaunchedEffect(taziehId) { vm.load(taziehId) }
+            val ui by vm.state.collectAsState()
 
             TaziehIndexScreen(
                 taziehTitle = taziehTitle,
-                items = indexItems,
+                items = ui.items,
                 onItemClick = { item -> navController.navigate("text_pager/${item.roleId}/0") },
-                onExportPdf = {
-                    scope.launch {
-                        val roles = db.roleDao().getByTazieh(taziehId)
-                        val rolesWithSections = roles.map { role ->
-                            role.title to db.sectionDao().getByRole(role.id)
-                        }
-                        com.example.bookapp.data.exportTaziehToPdf(context, taziehTitle, rolesWithSections)
-                    }
-                },
-                onRename = { item, newTitle ->
-                    scope.launch {
-                        db.roleDao().updateTitle(item.roleId, newTitle)
-                        reloadIndex()
-                    }
-                },
-                onMove = { index, direction ->
-                    scope.launch {
-                        val sorted = sortTaziehIndexItems(indexItems)
-                        val targetIndex = index + direction
-                        if (targetIndex in sorted.indices) {
-                            val roleA = db.roleDao().getById(sorted[index].roleId)
-                            val roleB = db.roleDao().getById(sorted[targetIndex].roleId)
-                            db.roleDao().updateOrderIndex(roleA.id, roleB.orderIndex)
-                            db.roleDao().updateOrderIndex(roleB.id, roleA.orderIndex)
-                            reloadIndex()
-                        }
-                    }
-                },
+                onExportPdf = { vm.exportPdf(context, taziehId, taziehTitle) },
+                onRename = { item, newTitle -> vm.rename(taziehId, item, newTitle) },
+                onMove = { index, direction -> vm.move(taziehId, index, direction) },
                 onBack = { navController.popBackStack() }
             )
         }
