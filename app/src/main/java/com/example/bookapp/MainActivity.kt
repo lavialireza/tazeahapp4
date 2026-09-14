@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
             .onFailure { android.widget.Toast.makeText(this, "اعمال سیاست ناموفق بود: ${it.message ?: "فایل نامعتبر است."}", android.widget.Toast.LENGTH_LONG).show() }
     }
 
-    override fun onNewIntent(intent: android.content.Intent?) {
+    override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleViewerAccessIntent(intent)
