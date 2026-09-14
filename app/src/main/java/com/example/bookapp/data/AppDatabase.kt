@@ -210,7 +210,7 @@ private data class FileWithKey(val name: String, val text: String, val key: Stri
 
 suspend fun syncRemoteContent(
     db: AppDatabase,
-    url: String = "https://raw.githubusercontent.com/lavialireza/tazeahappv-1/main/app/src/main/assets/content/001_sample.json"
+    url: String = "https://raw.githubusercontent.com/lavialireza/tazeahappv-1/main/app/src/admin/assets/content/001_sample.json"
 ): Result<Unit> {
     if (com.example.bookapp.BuildConfig.PUBLIC_VIEWER) {
         return Result.failure(IllegalStateException("نسخه عمومی اجازه دریافت محتوای آنلاین را ندارد"))

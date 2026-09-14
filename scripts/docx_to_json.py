@@ -15,7 +15,7 @@
 اجرا (روش پیشنهادی و ساده‌تر - افزودن خودکار به‌عنوان فایل جدید):
     python docx_to_json.py new_majles.docx
     (خروجی خودش به‌صورت یک فایل تازه و شماره‌دار، مثلاً 002_new-majles.json،
-     در پوشه‌ی app/src/main/assets/content/ ساخته می‌شود. کافیست این فایل تازه
+     در پوشه‌ی app/src/admin/assets/content/ ساخته می‌شود. کافیست این فایل تازه
      را commit/push کنید؛ محتوای قبلی دست‌نخورده می‌ماند و فقط همین مجلس تازه
      به برنامه اضافه می‌شود - نیازی به جایگزینی کل فایل داده نیست.)
 
@@ -160,5 +160,5 @@ if __name__ == "__main__":
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(add_stable_uids(result), f, ensure_ascii=False, indent=2)
 
-        print(f"تمام شد. فایل جدید ساخته شد: app/src/main/assets/content/{os.path.basename(output_path)}")
+        print(f"تمام شد. فایل جدید ساخته شد: app/src/admin/assets/content/{os.path.basename(output_path)}")
         print("این فایل را commit/push کنید؛ همین یک فایل به‌عنوان محتوای تازه اضافه می‌شود.")
