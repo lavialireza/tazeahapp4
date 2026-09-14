@@ -46,10 +46,18 @@ android {
     // Explicitly attach that directory to the viewer flavor so encrypted .taz
     // files are packaged into the Viewer APK under assets/content/.
     sourceSets {
+        // Keep the common source set completely free of content assets.
+        // Content is intentionally isolated per flavor so Admin JSON can
+        // never become an input to the public Viewer variant.
+        getByName("main") {
+            assets.setSrcDirs(emptyList<String>())
+        }
         getByName("viewer") {
+            setRoot("src/viewer")
             assets.setSrcDirs(listOf("src/viewer/assets"))
         }
         getByName("admin") {
+            setRoot("src/admin")
             assets.setSrcDirs(listOf("src/admin/assets"))
         }
     }
