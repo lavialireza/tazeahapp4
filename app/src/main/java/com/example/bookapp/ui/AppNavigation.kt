@@ -60,6 +60,7 @@ import com.example.bookapp.data.SearchResult
 import com.example.bookapp.data.SectionEntity
 import com.example.bookapp.data.syncLocalContentFiles
 import com.example.bookapp.data.syncRemoteContent
+import com.example.bookapp.data.ViewerAccessPolicy
 import com.example.bookapp.ui.screens.*
 import kotlinx.coroutines.launch
 
@@ -116,6 +117,8 @@ fun AppNavigation(
     val context = LocalContext.current
     val db = remember { AppDatabase.getInstance(context) }
     val publicViewer = BuildConfig.PUBLIC_VIEWER
+    var viewerPermissions by remember(publicViewer) { mutableStateOf(if (publicViewer) ViewerAccessPolicy.getEffectivePermissions(context) else ViewerAccessPolicy.permissionLabels.keys.associateWith { true }) }
+    fun featureEnabled(key: String): Boolean = !publicViewer || viewerPermissions[key] == true
     val navController: NavHostController = rememberNavController()
 
     LaunchedEffect(Unit) {
@@ -220,7 +223,8 @@ fun AppNavigation(
                 onOpenContentManagement = { if (!publicViewer) navController.navigate(ROUTE_CONTENT_MANAGEMENT) },
                 showViewerAccessManagement = !publicViewer,
                 onOpenViewerAccessManagement = { if (!publicViewer) navController.navigate(ROUTE_VIEWER_ACCESS) },
-                onItemClick = { result -> navController.navigate("text/${result.sectionId}") }
+                onItemClick = { result -> navController.navigate("text/${result.sectionId}") },
+                featureEnabled = ::featureEnabled
             )
         }
 
@@ -232,7 +236,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_SEARCH) {
+        if (featureEnabled("search")) composable(ROUTE_SEARCH) {
             var fields by remember { mutableStateOf(listOf<com.example.bookapp.data.FieldEntity>()) }
             var allTaziehs by remember { mutableStateOf(listOf<com.example.bookapp.data.TaziehEntity>()) }
             var allRoles by remember { mutableStateOf(listOf<com.example.bookapp.data.RoleEntity>()) }
@@ -266,7 +270,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_BOOKMARKS) {
+        if (featureEnabled("bookmarks")) composable(ROUTE_BOOKMARKS) {
             var items by remember { mutableStateOf(listOf<SearchResult>()) }
             LaunchedEffect(Unit) {
                 val ids = Prefs.getBookmarks(context).toList()
@@ -279,7 +283,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_NOTES) {
+        if (featureEnabled("notes")) composable(ROUTE_NOTES) {
             var notes by remember { mutableStateOf(listOf<NoteEntity>()) }
             val scope = androidx.compose.runtime.rememberCoroutineScope()
             suspend fun reload() { notes = db.noteDao().getAll() }
@@ -310,7 +314,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_MY_ROLE) {
+        if (featureEnabled("read")) composable(ROUTE_MY_ROLE) {
             var items by remember { mutableStateOf(listOf<MyRoleItem>()) }
             val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -348,11 +352,12 @@ fun AppNavigation(
                     scope.launch { reloadMyRoles() }
                 },
                 onBack = { navController.popBackStack() },
-                readOnly = publicViewer
+                readOnly = publicViewer,
+                showPdf = featureEnabled("pdf")
             )
         }
 
-        composable(ROUTE_ALL_IMAGES) {
+        if (featureEnabled("gallery")) composable(ROUTE_ALL_IMAGES) {
             var images by remember { mutableStateOf(listOf<GalleryImageItem>()) }
             LaunchedEffect(Unit) {
                 val taziehs = db.taziehDao().getAll()
@@ -368,7 +373,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_REHEARSAL) { backStackEntry ->
+        if (featureEnabled("training")) composable(ROUTE_REHEARSAL) { backStackEntry ->
             val roleId = backStackEntry.arguments?.getString("roleId")?.toLongOrNull() ?: 0L
             val roleTitle = backStackEntry.arguments?.getString("roleTitle") ?: ""
             var sections by remember { mutableStateOf(listOf<SectionEntity>()) }
@@ -420,6 +425,16 @@ fun AppNavigation(
                 keepScreenOn = keepScreenOn,
                 onKeepScreenOnChange = onKeepScreenOnChange,
                 showContentSync = !publicViewer,
+                showViewerAccessImport = publicViewer,
+                onImportViewerAccess = { uri ->
+                    val result = runCatching { context.contentResolver.openInputStream(uri) ?: error("فایل خوانده نشد.") }
+                        .fold(
+                            onSuccess = { input -> com.example.bookapp.data.ViewerAccessTransfer.importPolicy(context, input) },
+                            onFailure = { Result.failure(it) }
+                        )
+                    if (result.isSuccess && publicViewer) viewerPermissions = ViewerAccessPolicy.getEffectivePermissions(context)
+                    result
+                },
                 onSyncContent = { syncRemoteContent(db) },
                 onCheckAppUpdate = {
                     val installed = com.example.bookapp.data.UpdateHelper.getInstalledVersion(context)
@@ -780,7 +795,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_FIELDS) {
+        if (featureEnabled("read")) composable(ROUTE_FIELDS) {
             var fields by remember { mutableStateOf(emptyList<FieldCatalogItem>()) }
             LaunchedEffect(Unit) {
                 val allFields = db.fieldDao().getAll()
@@ -799,7 +814,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_TAZIEHS) { backStackEntry ->
+        if (featureEnabled("read")) composable(ROUTE_TAZIEHS) { backStackEntry ->
             val fieldId = backStackEntry.arguments?.getString("fieldId")?.toLongOrNull() ?: 0L
             var catalog by remember { mutableStateOf(emptyList<TaziehCatalogItem>()) }
             LaunchedEffect(fieldId) {
@@ -819,7 +834,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_ROLES) { backStackEntry ->
+        if (featureEnabled("read")) composable(ROUTE_ROLES) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             val taziehTitle = backStackEntry.arguments?.getString("taziehTitle") ?: ""
             var roles by remember { mutableStateOf(listOf<com.example.bookapp.data.RoleEntity>()) }
@@ -854,11 +869,12 @@ fun AppNavigation(
                 },
                 onCompare = { navController.navigate("compare/$taziehId") },
                 onBack = { navController.popBackStack() },
-                readOnly = publicViewer
+                readOnly = publicViewer,
+                showCompare = featureEnabled("compare")
             )
         }
 
-        composable(ROUTE_TAZIEH_INDEX) { backStackEntry ->
+        if (featureEnabled("read")) composable(ROUTE_TAZIEH_INDEX) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             val taziehTitle = backStackEntry.arguments?.getString("taziehTitle") ?: ""
             var indexItems by remember { mutableStateOf(listOf<TaziehIndexItem>()) }
@@ -1116,11 +1132,12 @@ fun AppNavigation(
                         reloadImages()
                     }
                 },
+                readOnly = publicViewer,
                 onBack = { navController.popBackStack() }
             )
         }
 
-        composable(ROUTE_COMPARE) { backStackEntry ->
+        if (featureEnabled("compare")) composable(ROUTE_COMPARE) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             var taziehTitle by remember { mutableStateOf("") }
             var roles by remember { mutableStateOf(listOf<com.example.bookapp.data.RoleEntity>()) }
@@ -1145,7 +1162,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_SECTIONS) { backStackEntry ->
+        if (featureEnabled("read")) composable(ROUTE_SECTIONS) { backStackEntry ->
             val roleId = backStackEntry.arguments?.getString("roleId")?.toLongOrNull() ?: 0L
             val roleTitle = backStackEntry.arguments?.getString("roleTitle") ?: ""
             var items by remember { mutableStateOf(listOf<ListItemData>()) }
@@ -1196,7 +1213,7 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_TEXT_PAGER) { backStackEntry ->
+        if (featureEnabled("read")) composable(ROUTE_TEXT_PAGER) { backStackEntry ->
             val roleId = backStackEntry.arguments?.getString("roleId")?.toLongOrNull() ?: 0L
             val startIndex = backStackEntry.arguments?.getString("startIndex")?.toIntOrNull() ?: 0
             var sections by remember { mutableStateOf(listOf<SectionEntity>()) }
@@ -1251,7 +1268,7 @@ fun AppNavigation(
             }
         }
 
-        composable(ROUTE_TEXT) { backStackEntry ->
+        if (featureEnabled("read")) composable(ROUTE_TEXT) { backStackEntry ->
             val sectionId = backStackEntry.arguments?.getString("sectionId")?.toLongOrNull() ?: 0L
             var title by remember { mutableStateOf("") }
             var content by remember { mutableStateOf("") }

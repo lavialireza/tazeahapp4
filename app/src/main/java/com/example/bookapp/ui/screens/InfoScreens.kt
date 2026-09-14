@@ -132,6 +132,8 @@ fun SettingsScreen(
     keepScreenOn: Boolean,
     onKeepScreenOnChange: (Boolean) -> Unit,
     showContentSync: Boolean = true,
+    showViewerAccessImport: Boolean = false,
+    onImportViewerAccess: suspend (android.net.Uri) -> Result<String> = { Result.success("") },
     onSyncContent: suspend () -> Result<Unit>,
     onCheckAppUpdate: suspend () -> Result<UpdateHelper.UpdateInfo?> = { Result.success(null) },
     db: AppDatabase,
@@ -404,6 +406,27 @@ fun SettingsScreen(
                                 Text(it, style = MaterialTheme.typography.bodySmall)
                             }
 
+            }
+
+            if (showViewerAccessImport) {
+                Spacer(Modifier.height(24.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(16.dp))
+                Text("مجوزهای Viewer", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(4.dp))
+                Text("فایل سیاستی را که از برنامه مدیر دریافت کرده‌اید انتخاب کنید تا قابلیت‌های این Viewer فعال یا غیرفعال شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(10.dp))
+                var accessMessage by remember { mutableStateOf<String?>(null) }
+                val accessLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    if (uri != null) {
+                        scope.launch {
+                            val result = onImportViewerAccess(uri)
+                            accessMessage = result.fold({ it }, { "اعمال سیاست ناموفق بود: ${it.message ?: "خطای نامشخص"}" })
+                        }
+                    }
+                }
+                Button(onClick = { accessLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("دریافت سیاست دسترسی") }
+                accessMessage?.let { Spacer(Modifier.height(8.dp)); Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
             }
 
             Spacer(Modifier.height(32.dp))

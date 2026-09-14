@@ -51,7 +51,8 @@ fun MainMenuScreen(
     onOpenContentManagement: () -> Unit,
     showViewerAccessManagement: Boolean,
     onOpenViewerAccessManagement: () -> Unit,
-    onItemClick: (SearchResult) -> Unit
+    onItemClick: (SearchResult) -> Unit,
+    featureEnabled: (String) -> Boolean = { true }
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("تعزیه") }) }
@@ -98,17 +99,17 @@ fun MainMenuScreen(
 
             Spacer(Modifier.height(14.dp))
 
-            MenuCard("لیست تعزیه‌ها", Icons.Filled.List, onOpenTaziehList, accentColor = TaziehGreen)
+            if (featureEnabled("read")) if (featureEnabled("read")) MenuCard("لیست تعزیه‌ها", Icons.Filled.List, onOpenTaziehList, accentColor = TaziehGreen)
             Spacer(Modifier.height(10.dp))
-            MenuCard("جستجو", Icons.Filled.Search, onOpenSearch)
+            if (featureEnabled("search")) if (featureEnabled("search")) MenuCard("جستجو", Icons.Filled.Search, onOpenSearch)
             Spacer(Modifier.height(10.dp))
-            MenuCard("علاقه‌مندی‌ها", Icons.Filled.Favorite, onOpenBookmarks)
+            if (featureEnabled("bookmarks")) if (featureEnabled("bookmarks")) MenuCard("علاقه‌مندی‌ها", Icons.Filled.Favorite, onOpenBookmarks)
             Spacer(Modifier.height(10.dp))
-            MenuCard("دفتر یادداشت", Icons.Filled.Edit, onOpenNotes)
+            if (featureEnabled("notes")) if (featureEnabled("notes")) MenuCard("دفتر یادداشت", Icons.Filled.Edit, onOpenNotes)
             Spacer(Modifier.height(10.dp))
-            MenuCard("گالری تصاویر", Icons.Filled.PhotoLibrary, onOpenGallery)
+            if (featureEnabled("gallery")) if (featureEnabled("gallery")) MenuCard("گالری تصاویر", Icons.Filled.PhotoLibrary, onOpenGallery)
             Spacer(Modifier.height(10.dp))
-            MenuCard("نقش من", Icons.Filled.School, onOpenMyRole, accentColor = TaziehGreen)
+            if (featureEnabled("read")) if (featureEnabled("read")) MenuCard("نقش من", Icons.Filled.School, onOpenMyRole, accentColor = TaziehGreen)
             Spacer(Modifier.height(10.dp))
             MenuCard("درباره برنامه", Icons.Filled.Info, onOpenAbout)
             Spacer(Modifier.height(10.dp))

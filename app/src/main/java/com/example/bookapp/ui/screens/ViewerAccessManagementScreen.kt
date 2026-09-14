@@ -6,11 +6,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.bookapp.data.ViewerAccessPolicy
+import com.example.bookapp.data.ViewerAccessTransfer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,6 +33,14 @@ fun ViewerAccessManagementScreen(
     var expiryText by remember { mutableStateOf("") }
     var customPermissions by remember { mutableStateOf(ViewerAccessPolicy.profileDefaults(profile)) }
     var message by remember { mutableStateOf<String?>(null) }
+    var exportTarget by remember { mutableStateOf("*") }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.openOutputStream(uri)?.let { ViewerAccessTransfer.writePolicy(context, exportTarget, it) } ?: error("فایل خروجی باز نشد.") }
+                .onSuccess { message = "فایل سیاست دسترسی آماده شد؛ آن را به Viewer منتقل کنید." }
+                .onFailure { message = "خروجی سیاست ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
+        }
+    }
 
     fun loadUser(user: ViewerAccessPolicy.SpecialUser) {
         selectedUser = user; installationId = user.installationId; profile = user.profile
@@ -54,6 +65,7 @@ fun ViewerAccessManagementScreen(
                             }
                         }
                         Button(onClick = { ViewerAccessPolicy.setPublicPermissions(context, publicPermissions); message = "پروفایل عمومی ذخیره شد." }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(6.dp)); Text("ذخیره پروفایل عمومی") }
+                        OutlinedButton(onClick = { exportTarget = "*"; exportLauncher.launch("viewer-access-public.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست عمومی برای Viewer") }
                         Text("نسخه سیاست: ${ViewerAccessPolicy.getPolicyVersion(context)}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -86,6 +98,10 @@ fun ViewerAccessManagementScreen(
                                 specialUsers = ViewerAccessPolicy.getSpecialUsers(context); resetEditor(); message = "کاربر خاص ذخیره شد."
                             }, Modifier.weight(1f)) { Text("ذخیره") }
                             OutlinedButton(onClick = { resetEditor() }, Modifier.weight(1f)) { Text("جدید") }
+                        }
+                        if (installationId.isNotBlank() && specialUsers.any { it.installationId == installationId.trim() }) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = { exportTarget = installationId.trim(); exportLauncher.launch("viewer-access-${installationId.trim()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست این Viewer") }
                         }
                     }
                 }

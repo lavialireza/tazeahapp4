@@ -39,6 +39,8 @@ object ViewerAccessPolicy {
     private const val KEY_PUBLIC = "public_permissions"
     private const val KEY_SPECIAL = "special_users"
     private const val KEY_POLICY_VERSION = "policy_version"
+    private const val KEY_IMPORTED_PUBLIC_VERSION = "imported_public_version"
+    private const val KEY_IMPORTED_PUBLIC = "imported_public_permissions"
 
     fun defaultPermissions(): Map<String, Boolean> = permissionLabels.keys.associateWith { key ->
         key !in setOf("copy", "share", "pdf")
@@ -48,6 +50,34 @@ object ViewerAccessPolicy {
         PROFILE_TRAINING -> defaultPermissions() + mapOf("training" to true)
         PROFILE_COLLABORATOR -> defaultPermissions() + mapOf("copy" to true, "share" to false, "pdf" to false)
         else -> defaultPermissions()
+    }
+
+
+    /** دسترسی مؤثر همین Viewer: کاربر خاص در صورت وجود بر پروفایل عمومی اولویت دارد. */
+    fun getEffectivePermissions(context: Context): Map<String, Boolean> {
+        val id = installationId(context)
+        val special = getSpecialUsers(context).firstOrNull { it.installationId == id }
+        if (special != null) {
+            val expiry = special.expiresAt
+            if (expiry == null || expiry <= 0L || System.currentTimeMillis() <= expiry) return special.permissions
+        }
+        return getPublicPermissions(context)
+    }
+
+    fun hasPermission(context: Context, key: String): Boolean = getEffectivePermissions(context)[key] == true
+
+    internal fun setImportedPublicPermissions(context: Context, permissions: Map<String, Boolean>, version: Int) {
+        val obj = JSONObject(); permissionLabels.keys.forEach { obj.put(it, permissions[it] == true) }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_IMPORTED_PUBLIC, obj.toString())
+            .putInt(KEY_IMPORTED_PUBLIC_VERSION, version)
+            .putString(KEY_PUBLIC, obj.toString())
+            .apply()
+    }
+
+    internal fun setImportedSpecialPermissions(context: Context, permissions: Map<String, Boolean>, expiresAt: Long?, version: Int) {
+        val id = installationId(context)
+        upsertSpecialUser(context, SpecialUser(id, PROFILE_CUSTOM, expiresAt, permissions))
     }
 
     fun getPublicPermissions(context: Context): Map<String, Boolean> {

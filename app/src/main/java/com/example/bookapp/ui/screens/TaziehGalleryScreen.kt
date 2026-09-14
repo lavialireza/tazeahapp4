@@ -38,6 +38,7 @@ fun TaziehGalleryScreen(
     onAddImage: (android.net.Uri) -> Unit,
     onDeleteImage: (TaziehImageItem) -> Unit,
     onUpdateCaption: (TaziehImageItem, String) -> Unit,
+    readOnly: Boolean = false,
     onBack: () -> Unit
 ) {
     var editingImage by remember { mutableStateOf<TaziehImageItem?>(null) }
@@ -59,7 +60,7 @@ fun TaziehGalleryScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            if (!readOnly) ExtendedFloatingActionButton(
                 text = { Text("افزودن عکس") },
                 icon = { Icon(Icons.Filled.AddAPhoto, contentDescription = null) },
                 onClick = { pickImageLauncher.launch("image/*") }
@@ -102,12 +103,12 @@ fun TaziehGalleryScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clickable {
+                                        .clickable(enabled = !readOnly) {
                                             editingImage = image
                                             captionText = image.caption
                                         }
                                 )
-                                IconButton(onClick = { onDeleteImage(image) }, modifier = Modifier.size(28.dp)) {
+                                if (!readOnly) IconButton(onClick = { onDeleteImage(image) }, modifier = Modifier.size(28.dp)) {
                                     Icon(Icons.Filled.Delete, contentDescription = "حذف عکس")
                                 }
                             }
@@ -119,7 +120,7 @@ fun TaziehGalleryScreen(
     }
 
     val current = editingImage
-    if (current != null) {
+    if (current != null && !readOnly) {
         AlertDialog(
             onDismissRequest = { editingImage = null },
             title = { Text("توضیح عکس") },

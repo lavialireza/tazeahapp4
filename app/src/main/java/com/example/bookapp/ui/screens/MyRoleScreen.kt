@@ -37,7 +37,8 @@ fun MyRoleScreen(
     onExportPdf: (MyRoleItem) -> Unit,
     onRemove: (MyRoleItem) -> Unit,
     onBack: () -> Unit,
-    readOnly: Boolean = false
+    readOnly: Boolean = false,
+    showPdf: Boolean = true
 ) {
     Scaffold(
         topBar = {
@@ -71,6 +72,7 @@ fun MyRoleScreen(
                         onRead = { onRead(item) },
                         onRehearse = { onRehearse(item) },
                         onExportPdf = { onExportPdf(item) },
+                        showPdf = showPdf,
                         onRemove = { onRemove(item) },
                         readOnly = readOnly
                     )
@@ -86,6 +88,7 @@ private fun MyRoleCard(
     onRead: () -> Unit,
     onRehearse: () -> Unit,
     onExportPdf: () -> Unit,
+    showPdf: Boolean = true,
     onRemove: () -> Unit,
     readOnly: Boolean = false
 ) {
@@ -122,7 +125,7 @@ private fun MyRoleCard(
                     Spacer(Modifier.width(6.dp))
                     Text("تمرین")
                 }
-                if (!readOnly) {
+                if (showPdf) {
                     OutlinedButton(onClick = onExportPdf, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Filled.PictureAsPdf, contentDescription = null)
                         Spacer(Modifier.width(6.dp))

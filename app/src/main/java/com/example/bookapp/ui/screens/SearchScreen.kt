@@ -39,6 +39,7 @@ fun SearchScreen(
     onDialogueResultClick: (DialogueSearchResult) -> Unit = {},
     isBookmarked: (Long) -> Boolean = { false },
     onToggleBookmark: (Long) -> Unit = {},
+    advancedEnabled: Boolean = true,
     onBack: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -158,7 +159,7 @@ fun SearchScreen(
                 trailingIcon = { if (searching) CircularProgressIndicator(Modifier.size(20.dp)) }
             )
 
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
+            if (advancedEnabled) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { showAdvanced = true }) { Text("تنظیمات جستجوی پیشرفته ⚙") }
             }
 

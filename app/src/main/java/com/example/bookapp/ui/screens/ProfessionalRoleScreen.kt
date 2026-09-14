@@ -31,7 +31,8 @@ fun ProfessionalRoleScreen(
     onSetMine: (ProfessionalRoleItem) -> Unit,
     onCompare: (ProfessionalRoleItem) -> Unit,
     onBack: () -> Unit,
-    readOnly: Boolean = false
+    readOnly: Boolean = false,
+    showCompare: Boolean = true
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = items.filter { normalizePersianSearch(it.title).contains(normalizePersianSearch(query)) }
@@ -58,7 +59,7 @@ fun ProfessionalRoleScreen(
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = { onSetMine(role) }) { Icon(Icons.Filled.School, null); Spacer(Modifier.width(4.dp)); Text(if (role.isMine) "نقش من" else "انتخاب نقش من") }
-                                OutlinedButton(onClick = { onCompare(role) }) { Text("مقایسه") }
+                                if (showCompare) OutlinedButton(onClick = { onCompare(role) }) { Text("مقایسه") }
                             }
                         }
                     }

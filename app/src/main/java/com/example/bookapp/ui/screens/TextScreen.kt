@@ -1,6 +1,5 @@
 package com.example.bookapp.ui.screens
 
-import com.example.bookapp.BuildConfig
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -36,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import com.example.bookapp.data.AudioPlayerHelper
+import com.example.bookapp.data.ViewerAccessPolicy
 import com.example.bookapp.ui.theme.FontChoiceLabels
 import com.example.bookapp.ui.theme.FontChoices
 import com.example.bookapp.data.FootnoteEntity
@@ -263,16 +263,18 @@ fun TextScreen(
                                 onClick = { moreExpanded = false; showTagDialog = true }
                             )
                         }
-                        if (!BuildConfig.PUBLIC_VIEWER) {
+                        val canCopy = !com.example.bookapp.BuildConfig.PUBLIC_VIEWER || ViewerAccessPolicy.hasPermission(context, "copy")
+                        val canShare = !com.example.bookapp.BuildConfig.PUBLIC_VIEWER || ViewerAccessPolicy.hasPermission(context, "share")
+                        if (canCopy) {
                             DropdownMenuItem(
                                 text = { Text("کپی متن") },
                                 onClick = { moreExpanded = false; copyToClipboard(context, title, content) }
                             )
-                            DropdownMenuItem(
+                            if (canShare) DropdownMenuItem(
                                 text = { Text("اشتراک‌گذاری") },
                                 onClick = { moreExpanded = false; shareText(context, title, content) }
                             )
-                            if (sectionId != null) {
+                            if (sectionId != null && canShare) {
                                 DropdownMenuItem(
                                     text = { Text("اشتراک‌گذاری لینک مستقیم این بخش") },
                                     onClick = { moreExpanded = false; shareSectionLink(context, title, sectionId) }
