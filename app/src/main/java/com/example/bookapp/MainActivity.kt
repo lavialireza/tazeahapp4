@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.bookapp.data.Prefs
+import com.example.bookapp.data.ViewerAccessTransfer
 import com.example.bookapp.data.AppDatabase
 import com.example.bookapp.data.migratePrefsUserDataToRoom
 import com.example.bookapp.ui.AppNavigation
@@ -23,8 +24,27 @@ import com.example.bookapp.ui.theme.colorSchemeFor
 import com.example.bookapp.ui.theme.typographyFor
 
 class MainActivity : ComponentActivity() {
+    private fun handleViewerAccessIntent(incoming: android.content.Intent?) {
+        if (!BuildConfig.PUBLIC_VIEWER) return
+        if (incoming?.action != android.content.Intent.ACTION_SEND) return
+        val uri = incoming.getParcelableExtra<android.net.Uri>(android.content.Intent.EXTRA_STREAM) ?: return
+        runCatching { contentResolver.openInputStream(uri) ?: error("فایل سیاست دسترسی خوانده نشد.") }
+            .fold(
+                onSuccess = { input -> ViewerAccessTransfer.importPolicy(this, input) },
+                onFailure = { Result.failure(it) }
+            ).onSuccess { android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show() }
+            .onFailure { android.widget.Toast.makeText(this, "اعمال سیاست ناموفق بود: ${it.message ?: "فایل نامعتبر است."}", android.widget.Toast.LENGTH_LONG).show() }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleViewerAccessIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleViewerAccessIntent(intent)
         if (BuildConfig.PUBLIC_VIEWER) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }

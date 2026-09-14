@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Send
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
@@ -41,6 +43,29 @@ fun ViewerAccessManagementScreen(
                 .onFailure { message = "خروجی سیاست ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
         }
     }
+    fun sendDirectlyToViewer(target: String) {
+        runCatching {
+            val uri = ViewerAccessTransfer.createShareUri(context, target)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                setPackage("com.example.bookapp.viewer")
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            // اگر Viewer نصب نیست، همان فایل را از طریق Share Sheet در اختیار کاربر می‌گذاریم.
+            runCatching {
+                val uri = ViewerAccessTransfer.createShareUri(context, target)
+                val fallback = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(fallback, "ارسال سیاست دسترسی به Viewer"))
+            }.onFailure { e -> message = "ارسال به Viewer ناموفق بود: ${e.message ?: "خطای نامشخص"}" }
+        }
+    }
 
     fun loadUser(user: ViewerAccessPolicy.SpecialUser) {
         selectedUser = user; installationId = user.installationId; profile = user.profile
@@ -66,6 +91,7 @@ fun ViewerAccessManagementScreen(
                         }
                         Button(onClick = { ViewerAccessPolicy.setPublicPermissions(context, publicPermissions); message = "پروفایل عمومی ذخیره شد." }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(6.dp)); Text("ذخیره پروفایل عمومی") }
                         OutlinedButton(onClick = { exportTarget = "*"; exportLauncher.launch("viewer-access-public.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست عمومی برای Viewer") }
+                        Button(onClick = { sendDirectlyToViewer("*") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(6.dp)); Text("ارسال مستقیم به Viewer") }
                         Text("نسخه سیاست: ${ViewerAccessPolicy.getPolicyVersion(context)}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -102,6 +128,7 @@ fun ViewerAccessManagementScreen(
                         if (installationId.isNotBlank() && specialUsers.any { it.installationId == installationId.trim() }) {
                             Spacer(Modifier.height(8.dp))
                             OutlinedButton(onClick = { exportTarget = installationId.trim(); exportLauncher.launch("viewer-access-${installationId.trim()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست این Viewer") }
+                            Button(onClick = { sendDirectlyToViewer(installationId.trim()) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(6.dp)); Text("ارسال مستقیم به همین Viewer") }
                         }
                     }
                 }

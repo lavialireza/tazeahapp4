@@ -1,6 +1,7 @@
 package com.example.bookapp.data
 
 import android.content.Context
+import androidx.core.content.FileProvider
 import java.io.InputStream
 import java.io.OutputStream
 import org.json.JSONObject
@@ -42,6 +43,13 @@ object ViewerAccessTransfer {
 
     fun writePolicy(context: Context, targetInstallationId: String, output: OutputStream) {
         output.use { it.write(buildPolicyJson(context, targetInstallationId).toByteArray(Charsets.UTF_8)) }
+    }
+
+    /** فایل سیاست را در cache آماده می‌کند تا Admin بتواند آن را مستقیماً با Viewer به اشتراک بگذارد. */
+    fun createShareUri(context: Context, targetInstallationId: String): android.net.Uri {
+        val file = java.io.File(context.cacheDir, "viewer-access-share.json")
+        file.outputStream().use { writePolicy(context, targetInstallationId, it) }
+        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
     fun importPolicy(context: Context, input: InputStream): Result<String> = runCatching {
