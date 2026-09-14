@@ -47,10 +47,10 @@ android {
     // files are packaged into the Viewer APK under assets/content/.
     sourceSets {
         getByName("viewer") {
-            assets.srcDir("src/viewer/assets")
+            assets.setSrcDirs(listOf("src/viewer/assets"))
         }
         getByName("admin") {
-            assets.srcDir("src/admin/assets")
+            assets.setSrcDirs(listOf("src/admin/assets"))
         }
     }
 
@@ -150,6 +150,28 @@ android {
         }
     }
 }
+
+
+    // Security hardening: a public Viewer must never package plaintext JSON assets.
+    // Remove accidental JSON files from the Viewer merged-assets output after AGP
+    // merges flavor assets, while leaving encrypted .taz files untouched.
+    tasks.matching { it.name.matches(Regex("mergeViewer.*Assets")) }.configureEach {
+        doLast {
+            val mergedRoot = layout.buildDirectory.dir("intermediates/merged_assets").get().asFile
+            if (mergedRoot.exists()) {
+                mergedRoot.walkTopDown()
+                    .filter {
+                        it.isFile &&
+                        it.extension.equals("json", ignoreCase = true) &&
+                        it.path.contains("${File.separator}mergeViewer")
+                    }
+                    .forEach { file ->
+                        logger.lifecycle("Viewer security: removing plaintext JSON asset ${file.relativeTo(mergedRoot)}")
+                        check(file.delete()) { "Could not remove Viewer JSON asset: ${file.absolutePath}" }
+                    }
+            }
+        }
+    }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
