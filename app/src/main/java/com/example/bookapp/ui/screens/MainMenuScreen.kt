@@ -49,8 +49,6 @@ fun MainMenuScreen(
     onOpenMuharramCalendar: () -> Unit,
     showContentManagement: Boolean,
     onOpenContentManagement: () -> Unit,
-    showViewerAccessManagement: Boolean,
-    onOpenViewerAccessManagement: () -> Unit,
     onItemClick: (SearchResult) -> Unit
 ) {
     Scaffold(
@@ -117,10 +115,6 @@ fun MainMenuScreen(
             if (showContentManagement) {
                 MenuCard("مدیریت محتوا", Icons.Filled.Storage, onOpenContentManagement, accentColor = TaziehGreen)
                 Spacer(Modifier.height(10.dp))
-                if (showViewerAccessManagement) {
-                    MenuCard("مدیریت دسترسی Viewer", Icons.Filled.Storage, onOpenViewerAccessManagement, accentColor = TaziehGreen)
-                    Spacer(Modifier.height(10.dp))
-                }
             }
             MenuCard("ورژن برنامه", null, onOpenVersion)
             Spacer(Modifier.height(10.dp))
