@@ -32,7 +32,15 @@ class MainActivity : ComponentActivity() {
             .fold(
                 onSuccess = { input -> ViewerAccessTransfer.importPolicy(this, input) },
                 onFailure = { Result.failure(it) }
-            ).onSuccess { android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show() }
+            ).onSuccess { message ->
+                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+                // سیاست جدید در SharedPreferences ذخیره شده است، اما Compose ممکن است
+                // مجوزهای قبلی را در state نگه داشته باشد. Intent را پاک می‌کنیم تا
+                // در recreate دوباره همان فایل وارد نشود، سپس Activity را بازسازی می‌کنیم
+                // تا منوی Viewer و همه قابلیت‌ها فوراً بر اساس مجوزهای جدید refresh شوند.
+                setIntent(android.content.Intent())
+                recreate()
+            }
             .onFailure { android.widget.Toast.makeText(this, "اعمال سیاست ناموفق بود: ${it.message ?: "فایل نامعتبر است."}", android.widget.Toast.LENGTH_LONG).show() }
     }
 
