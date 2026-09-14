@@ -41,10 +41,26 @@ jobs:
         run: |
           set -euo pipefail
           EXPECTED="${GITHUB_RUN_NUMBER}"
-          AAPT="${ANDROID_HOME}/build-tools/34.0.0/aapt"
-          test -x "$AAPT"
+          # Find an installed aapt instead of hard-coding one Build Tools version.
+          AAPT="$(find "${ANDROID_HOME}/build-tools" -maxdepth 2 -type f -name aapt -perm -111 2>/dev/null | sort -V | tail -n 1)"
+          if [ -z "${AAPT}" ] || [ ! -x "${AAPT}" ]; then
+            echo "ERROR: Android aapt was not found under ${ANDROID_HOME}/build-tools"
+            exit 1
+          fi
+
           for APK in app/build/outputs/apk/admin/debug/app-admin-debug.apk app/build/outputs/apk/viewer/debug/app-viewer-debug.apk; do
-            CODE="$($AAPT dump badging "$APK" | sed -n 's/.*versionCode='\''\([^ '\'']*\)\''.*/\1/p' | head -1)"
+            test -f "$APK"
+
+            # Extract only the numeric value after versionCode='...'.
+            BADGING="$($AAPT dump badging "$APK")"
+            CODE="$(printf '%s\n' "$BADGING" | grep -oE "versionCode='[0-9]+'" | head -n 1 | sed "s/versionCode='//;s/'//")"
+
+            if [ -z "$CODE" ]; then
+              echo "ERROR: Could not read versionCode from $APK"
+              echo "$BADGING"
+              exit 1
+            fi
+
             echo "$APK versionCode=$CODE expected=$EXPECTED"
             test "$CODE" = "$EXPECTED"
           done
