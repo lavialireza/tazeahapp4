@@ -14,8 +14,10 @@ import com.example.bookapp.data.ViewerAccessPolicy
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun ViewerAccessManagementScreen(
     onBack: () -> Unit
 ) {
