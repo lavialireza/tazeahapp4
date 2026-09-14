@@ -118,12 +118,12 @@ fun AppNavigation(
     val db = remember { AppDatabase.getInstance(context) }
     val publicViewer = BuildConfig.PUBLIC_VIEWER
     var viewerPermissions by remember(publicViewer) { mutableStateOf(if (publicViewer) ViewerAccessPolicy.getEffectivePermissions(context) else ViewerAccessPolicy.permissionLabels.keys.associateWith { true }) }
+    val navController: NavHostController = rememberNavController()
     fun featureEnabled(key: String): Boolean = !publicViewer || viewerPermissions[key] == true
     fun navigateIfAllowed(key: String, route: String) {
         if (featureEnabled(key)) navController.navigate(route)
         else android.widget.Toast.makeText(context, "این قابلیت در سیاست دسترسی فعلی فعال نیست.", android.widget.Toast.LENGTH_SHORT).show()
     }
-    val navController: NavHostController = rememberNavController()
 
     LaunchedEffect(Unit) {
         // محتوای همراه APK برای هر دو build بارگذاری می‌شود؛ این مسیر فقط assets
@@ -267,10 +267,14 @@ fun AppNavigation(
                 onDialogueResultClick = { d -> navController.navigate("dialogue_reader/${d.dialogueId}") },
                 isBookmarked = { id -> id in bookmarkedIds },
                 showBookmarks = featureEnabled("bookmarks"),
-                onToggleBookmark = { if (featureEnabled("bookmarks")) { id ->
-                    Prefs.toggleBookmark(context, id)
-                    bookmarkedIds = Prefs.getBookmarks(context)
-                } },
+                onToggleBookmark = { id ->
+                    if (featureEnabled("bookmarks")) {
+                        Prefs.toggleBookmark(context, id)
+                        bookmarkedIds = Prefs.getBookmarks(context)
+                    } else {
+                        android.widget.Toast.makeText(context, "دسترسی به علاقه‌مندی‌ها فعال نیست.", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onBack = { navController.popBackStack() }
             )
         }
