@@ -15,7 +15,7 @@
 4. روی دکمه Run بزنید تا روی گوشی یا شبیه‌ساز نصب شود.
 
 با اولین اجرا، برنامه به‌طور خودکار داده‌های نمونه از فایل‌های JSON داخل پوشه‌ی
-app/src/main/assets/content/ را به ترتیب نام فایل در دیتابیس داخلی (Room/SQLite) وارد می‌کند.
+app/src/admin/assets/content/ را به ترتیب نام فایل در دیتابیس داخلی (Room/SQLite) وارد می‌کند.
 
 ## چطور محتوای واقعی (فایل ورد) را اضافه کنم؟
 
@@ -32,7 +32,7 @@ app/src/main/assets/content/ را به ترتیب نام فایل در دیتا�
    python scripts/docx_to_json.py my_new_majles.docx
 
    اسکریپت خودش یک فایل تازه و شماره‌دار (مثلاً 002_my-new-majles.json) داخل
-   app/src/main/assets/content/ می‌سازد.
+   app/src/admin/assets/content/ می‌سازد.
 
 3. همین یک فایل جدید را commit/push کنید. **نیازی به لمس یا جایگزینی فایل‌های
    قبلی نیست** — برنامه در اجرای بعدی، فقط فایل‌هایی از پوشه‌ی content را که
@@ -76,7 +76,7 @@ BookApp/
     ui/
       AppNavigation.kt   (مسیریابی بین صفحات)
       screens/           (صفحات ورود، منوی اصلی، فهرست عمومی، متن، درباره/تنظیمات/ورژن)
-  app/src/main/assets/content/           (فایل‌های JSON محتوای تعزیه، به‌ترتیب نام بارگذاری می‌شوند)
+  app/src/admin/assets/content/           (فایل‌های JSON محتوای تعزیه، به‌ترتیب نام بارگذاری می‌شوند)
   scripts/docx_to_json.py                (تبدیل Word به JSON، با افزودن خودکار به content/)
 
 ## مدیریت دسترسی Viewer — Stage 2
