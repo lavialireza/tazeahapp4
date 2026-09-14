@@ -81,6 +81,7 @@ private const val ROUTE_CHANGELOG = "changelog"
 private const val ROUTE_GLOSSARY = "glossary"
 private const val ROUTE_MUHARRAM_CALENDAR = "muharram_calendar"
 private const val ROUTE_CONTENT_MANAGEMENT = "content_management"
+private const val ROUTE_VIEWER_ACCESS = "viewer_access"
 private const val ROUTE_CONTENT_EDITOR = "content_editor"
 private const val ROUTE_FIELDS = "fields"
 private const val ROUTE_TAZIEHS = "taziehs/{fieldId}/{fieldTitle}"
@@ -217,6 +218,8 @@ fun AppNavigation(
                 onOpenMuharramCalendar = { navController.navigate(ROUTE_MUHARRAM_CALENDAR) },
                 showContentManagement = !publicViewer,
                 onOpenContentManagement = { if (!publicViewer) navController.navigate(ROUTE_CONTENT_MANAGEMENT) },
+                showViewerAccessManagement = !publicViewer,
+                onOpenViewerAccessManagement = { if (!publicViewer) navController.navigate(ROUTE_VIEWER_ACCESS) },
                 onItemClick = { result -> navController.navigate("text/${result.sectionId}") }
             )
         }
@@ -483,6 +486,10 @@ fun AppNavigation(
                 },
                 onBack = { navController.popBackStack() }
             )
+        }
+
+        if (!publicViewer) composable(ROUTE_VIEWER_ACCESS) {
+            ViewerAccessManagementScreen(onBack = { navController.popBackStack() })
         }
 
         if (!publicViewer) composable(ROUTE_CONTENT_MANAGEMENT) {
