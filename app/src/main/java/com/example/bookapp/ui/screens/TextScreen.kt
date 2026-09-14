@@ -53,6 +53,9 @@ fun TextScreen(
     content: String,
     isBookmarked: Boolean,
     onToggleBookmark: () -> Unit,
+    canBookmark: Boolean = true,
+    canAudio: Boolean = true,
+    canTts: Boolean = true,
     sectionId: Long? = null,
     audioUrl: String? = null,
     relatedSections: List<SearchResult> = emptyList(),
@@ -206,15 +209,15 @@ fun TextScreen(
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "تنظیمات")
                     }
-                    IconButton(onClick = {
+                    if (canAudio || canTts) IconButton(onClick = {
                         if (isSpeaking) {
                             speechHelper.stop()
                             audioPlayerHelper.stop()
                             isSpeaking = false
                         } else {
-                            if (!audioUrl.isNullOrBlank()) {
+                            if (canAudio && !audioUrl.isNullOrBlank()) {
                                 audioPlayerHelper.play(audioUrl)
-                            } else {
+                            } else if (canTts) {
                                 speechHelper.speak(content)
                             }
                             isSpeaking = true
@@ -225,7 +228,7 @@ fun TextScreen(
                             contentDescription = if (isSpeaking) "توقف خواندن" else if (!audioUrl.isNullOrBlank()) "پخش صدای واقعی" else "خواندن صوتی"
                         )
                     }
-                    IconButton(onClick = onToggleBookmark) {
+                    if (canBookmark) IconButton(onClick = onToggleBookmark) {
                         Icon(
                             if (isBookmarked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = "نشان کردن"
@@ -285,7 +288,7 @@ fun TextScreen(
                             text = { Text("گزارش اشکال در این متن") },
                             onClick = { moreExpanded = false; reportContentIssue(context, title, content, sectionId) }
                         )
-                        if (sectionId != null) {
+                        if (!com.example.bookapp.BuildConfig.PUBLIC_VIEWER && sectionId != null) {
                             DropdownMenuItem(
                                 text = { Text(if (audioUrl.isNullOrBlank()) "افزودن صدای واقعی" else "تعویض صدای واقعی") },
                                 onClick = { moreExpanded = false; audioPickerLauncher.launch("audio/*") }

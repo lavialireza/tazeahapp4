@@ -119,6 +119,10 @@ fun AppNavigation(
     val publicViewer = BuildConfig.PUBLIC_VIEWER
     var viewerPermissions by remember(publicViewer) { mutableStateOf(if (publicViewer) ViewerAccessPolicy.getEffectivePermissions(context) else ViewerAccessPolicy.permissionLabels.keys.associateWith { true }) }
     fun featureEnabled(key: String): Boolean = !publicViewer || viewerPermissions[key] == true
+    fun navigateIfAllowed(key: String, route: String) {
+        if (featureEnabled(key)) navController.navigate(route)
+        else android.widget.Toast.makeText(context, "این قابلیت در سیاست دسترسی فعلی فعال نیست.", android.widget.Toast.LENGTH_SHORT).show()
+    }
     val navController: NavHostController = rememberNavController()
 
     LaunchedEffect(Unit) {
@@ -139,9 +143,9 @@ fun AppNavigation(
     // اولویت با آن است؛ وگرنه اگر از میان‌بر آیکون باز شده باشد، به همان مقصد می‌رویم
     fun postLoginRoute(): String = when {
         deepLinkSectionId != null -> "text/$deepLinkSectionId"
-        shortcutTarget == "search" -> ROUTE_SEARCH
-        shortcutTarget == "notes" -> ROUTE_NOTES
-        shortcutTarget == "bookmarks" -> ROUTE_BOOKMARKS
+        shortcutTarget == "search" && featureEnabled("search") -> ROUTE_SEARCH
+        shortcutTarget == "notes" && featureEnabled("notes") -> ROUTE_NOTES
+        shortcutTarget == "bookmarks" && featureEnabled("bookmarks") -> ROUTE_BOOKMARKS
         else -> ROUTE_MAIN_MENU
     }
 
@@ -208,11 +212,11 @@ fun AppNavigation(
                 randomVerse = randomVerse,
                 recentItems = recentItems,
                 onOpenTaziehList = { navController.navigate(ROUTE_FIELDS) },
-                onOpenSearch = { navController.navigate(ROUTE_SEARCH) },
-                onOpenBookmarks = { navController.navigate(ROUTE_BOOKMARKS) },
-                onOpenNotes = { navController.navigate(ROUTE_NOTES) },
-                onOpenGallery = { navController.navigate(ROUTE_ALL_IMAGES) },
-                onOpenMyRole = { navController.navigate(ROUTE_MY_ROLE) },
+                onOpenSearch = { navigateIfAllowed("search", ROUTE_SEARCH) },
+                onOpenBookmarks = { navigateIfAllowed("bookmarks", ROUTE_BOOKMARKS) },
+                onOpenNotes = { navigateIfAllowed("notes", ROUTE_NOTES) },
+                onOpenGallery = { navigateIfAllowed("gallery", ROUTE_ALL_IMAGES) },
+                onOpenMyRole = { navigateIfAllowed("read", ROUTE_MY_ROLE) },
                 onOpenAbout = { navController.navigate(ROUTE_ABOUT) },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
                 onOpenVersion = { navController.navigate(ROUTE_VERSION) },
@@ -262,10 +266,11 @@ fun AppNavigation(
                 onSearchDialogues = { query -> db.searchDao().searchDialogues(query) },
                 onDialogueResultClick = { d -> navController.navigate("dialogue_reader/${d.dialogueId}") },
                 isBookmarked = { id -> id in bookmarkedIds },
-                onToggleBookmark = { id ->
+                showBookmarks = featureEnabled("bookmarks"),
+                onToggleBookmark = { if (featureEnabled("bookmarks")) { id ->
                     Prefs.toggleBookmark(context, id)
                     bookmarkedIds = Prefs.getBookmarks(context)
-                },
+                } },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -1306,9 +1311,10 @@ fun AppNavigation(
                 title = title,
                 content = content,
                 isBookmarked = bookmarked,
-                onToggleBookmark = {
-                    bookmarked = Prefs.toggleBookmark(context, sectionId)
-                },
+                onToggleBookmark = { if (featureEnabled("bookmarks")) bookmarked = Prefs.toggleBookmark(context, sectionId) },
+                canBookmark = featureEnabled("bookmarks"),
+                canAudio = featureEnabled("audio"),
+                canTts = featureEnabled("tts"),
                 sectionId = sectionId,
                 audioUrl = sectionAudioUrl,
                 relatedSections = relatedSections,
@@ -1332,7 +1338,7 @@ fun AppNavigation(
                         reloadFootnotes()
                     }
                 },
-                onOpenSearch = { navController.navigate(ROUTE_SEARCH) },
+                onOpenSearch = { navigateIfAllowed("search", ROUTE_SEARCH) },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
                 fieldTitle = breadcrumb.first,
                 taziehTitle = breadcrumb.second,

@@ -39,6 +39,7 @@ fun SearchScreen(
     onDialogueResultClick: (DialogueSearchResult) -> Unit = {},
     isBookmarked: (Long) -> Boolean = { false },
     onToggleBookmark: (Long) -> Unit = {},
+    showBookmarks: Boolean = true,
     advancedEnabled: Boolean = true,
     onBack: () -> Unit
 ) {
@@ -186,7 +187,7 @@ fun SearchScreen(
                                     Text("محل تطبیق: ${r.matchSource}", style = MaterialTheme.typography.labelSmall)
                                 }
                             },
-                            trailingContent = { IconButton(onClick = { onToggleBookmark(r.sectionId) }) { Icon(if (isBookmarked(r.sectionId)) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = "نشان کردن") } },
+                            trailingContent = if (showBookmarks) ({ IconButton(onClick = { onToggleBookmark(r.sectionId) }) { Icon(if (isBookmarked(r.sectionId)) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = "نشان کردن") } }) else null,
                             modifier = Modifier.clickable { onResultClick(r) }
                         )
                         HorizontalDivider()
