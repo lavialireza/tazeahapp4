@@ -1,5 +1,7 @@
 package com.example.bookapp.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -7,14 +9,22 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
-import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 
 data class GalleryImageItem(
@@ -36,8 +46,7 @@ fun AllImagesGalleryScreen(
     images: List<GalleryImageItem>,
     onBack: () -> Unit
 ) {
-    val previewImageState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<GalleryImageItem?>(null) }
-    val previewImage = previewImageState.value
+    var previewImage by remember { mutableStateOf<GalleryImageItem?>(null) }
 
     Scaffold(
         topBar = {
@@ -77,7 +86,7 @@ fun AllImagesGalleryScreen(
                                     .fillMaxWidth()
                                     .height(180.dp)
                                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                                    .clickable { previewImageState.value = image }
+                                    .clickable { previewImage = image }
                             )
                             Column(Modifier.padding(8.dp)) {
                                 Text(
@@ -100,31 +109,33 @@ fun AllImagesGalleryScreen(
 
     val preview = previewImage
     if (preview != null) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { previewImageState.value = null },
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true
+        Dialog(
+            onDismissRequest = { previewImage = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false
             )
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(8.dp),
-                contentAlignment = androidx.compose.ui.Alignment.Center
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
             ) {
-                Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(12.dp)) {
-                    Box(Modifier.fillMaxSize()) {
-                        AsyncImage(
-                            model = preview.filePath,
-                            contentDescription = preview.caption,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        TextButton(
-                            onClick = { previewImageState.value = null },
-                            modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd)
-                        ) { Text("بستن") }
-                    }
+                AsyncImage(
+                    model = preview.filePath,
+                    contentDescription = preview.caption,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(12.dp)
+                )
+                IconButton(
+                    onClick = { previewImage = null },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "بستن تصویر",
+                        tint = Color.White
+                    )
                 }
             }
         }
