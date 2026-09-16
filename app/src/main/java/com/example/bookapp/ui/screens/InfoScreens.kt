@@ -21,6 +21,8 @@ import com.example.bookapp.data.UpdateHelper
 import com.example.bookapp.data.Prefs
 import kotlinx.coroutines.launch
 
+private const val APP_WEBSITE = "" // آدرس واقعی سایت برنامه را اینجا وارد کنید؛ آدرس مخزن GitHub نباید در معرفی عمومی نمایش داده شود.
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
@@ -31,6 +33,7 @@ fun AboutScreen(
     readCount: Int,
     streakDays: Int,
     activeDaysLast14: List<Boolean> = emptyList(),
+    showAppIntro: Boolean = true,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -99,18 +102,23 @@ fun AboutScreen(
             Text("نسخه: ${BuildConfig.VERSION_NAME}")
             Text("راه ارتباطی: [09132383677]")
 
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = {
+            if (showAppIntro) {
+                Spacer(Modifier.height(24.dp))
+                Button(onClick = {
                 val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(
                         android.content.Intent.EXTRA_TEXT,
-                        "این اپ رو ببین: «تعزیه و شبیه‌خوانی» — کتابخانه‌ای کامل و آفلاین از نسخه‌های تعزیه.\nhttps://github.com/lavialireza/taziehapp"
+                        buildString {
+                            append("این اپ رو ببین: «تعزیه و شبیه‌خوانی» — کتابخانه‌ای کامل و آفلاین از نسخه‌های تعزیه.")
+                            if (APP_WEBSITE.isNotBlank()) append("\n$APP_WEBSITE")
+                        }
                     )
                 }
                 context.startActivity(android.content.Intent.createChooser(intent, "معرفی اپ به دیگران"))
-            }) {
-                Text("معرفی این اپ به دیگران")
+                }) {
+                    Text("معرفی این اپ به دیگران")
+                }
             }
         }
     }

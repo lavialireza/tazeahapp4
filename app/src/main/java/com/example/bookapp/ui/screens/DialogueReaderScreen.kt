@@ -41,7 +41,8 @@ fun DialogueReaderScreen(
     onAddTurn: () -> Unit = {},
     onExportPdf: () -> Unit = {},
     onBack: () -> Unit,
-    readOnly: Boolean = false
+    readOnly: Boolean = false,
+    showPdf: Boolean = true
 ) {
     Scaffold(
         topBar = {
@@ -58,7 +59,7 @@ fun DialogueReaderScreen(
                             Icon(Icons.Filled.Add, contentDescription = "افزودن نوبت")
                         }
                     }
-                    if (!readOnly) {
+                    if (showPdf) {
                         IconButton(onClick = onExportPdf) {
                             Icon(Icons.Filled.Share, contentDescription = "خروجی PDF گفتگو")
                         }

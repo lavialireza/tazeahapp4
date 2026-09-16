@@ -25,7 +25,9 @@ object ViewerAccessPolicy {
         "gallery" to "گالری تصاویر",
         "copy" to "کپی متن",
         "share" to "اشتراک‌گذاری",
-        "pdf" to "PDF"
+        "pdf" to "PDF",
+        "footnotes" to "پاورقی",
+        "appIntro" to "معرفی برنامه"
     )
 
     data class SpecialUser(
@@ -43,7 +45,7 @@ object ViewerAccessPolicy {
     private const val KEY_IMPORTED_PUBLIC = "imported_public_permissions"
 
     fun defaultPermissions(): Map<String, Boolean> = permissionLabels.keys.associateWith { key ->
-        key !in setOf("copy", "share", "pdf")
+        key !in setOf("copy", "share", "pdf", "appIntro")
     }
 
     fun profileDefaults(profile: String): Map<String, Boolean> = when (profile) {
@@ -124,14 +126,21 @@ object ViewerAccessPolicy {
         }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val next = prefs.getInt(KEY_POLICY_VERSION, 1) + 1
-        prefs.edit().putString(KEY_SPECIAL, arr.toString()).putInt(KEY_POLICY_VERSION, next).apply()
+        // commit() is intentional here: the Admin screen immediately reloads the list
+        // and the policy may be exported to Viewer in the same UI action.
+        val saved = prefs.edit().putString(KEY_SPECIAL, arr.toString()).putInt(KEY_POLICY_VERSION, next).commit()
+        check(saved) { "ذخیره کاربران خاص انجام نشد." }
     }
 
     fun upsertSpecialUser(context: Context, user: SpecialUser) {
+        val normalizedId = user.installationId.trim().uppercase(java.util.Locale.US)
+        require(normalizedId.isNotBlank()) { "شناسه نصب خالی است." }
+        val normalized = user.copy(installationId = normalizedId)
         val users = getSpecialUsers(context).toMutableList()
-        val index = users.indexOfFirst { it.installationId == user.installationId }
-        if (index >= 0) users[index] = user else users.add(user)
+        val index = users.indexOfFirst { it.installationId.trim().equals(normalizedId, ignoreCase = true) }
+        if (index >= 0) users[index] = normalized else users.add(normalized)
         saveSpecialUsers(context, users)
+        check(getSpecialUsers(context).any { it.installationId == normalizedId }) { "کاربر خاص پس از ذخیره قابل بازیابی نیست." }
     }
 
     fun removeSpecialUser(context: Context, installationId: String) {

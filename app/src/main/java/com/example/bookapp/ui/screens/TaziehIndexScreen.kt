@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -61,10 +62,13 @@ fun TaziehIndexScreen(
     items: List<TaziehIndexItem>,
     onItemClick: (TaziehIndexItem) -> Unit,
     onExportPdf: () -> Unit,
+    onOpenGallery: () -> Unit = {},
+    showGallery: Boolean = true,
     onRename: (TaziehIndexItem, String) -> Unit,
     onMove: (index: Int, direction: Int) -> Unit,
     onBack: () -> Unit,
-    readOnly: Boolean = false
+    readOnly: Boolean = false,
+    showPdf: Boolean = true
 ) {
     val sorted = remember(items) { sortTaziehIndexItems(items) }
     var editingItem by remember { mutableStateOf<TaziehIndexItem?>(null) }
@@ -80,7 +84,12 @@ fun TaziehIndexScreen(
                     }
                 },
                 actions = {
-                    if (!readOnly) {
+                    if (showGallery) {
+                        IconButton(onClick = onOpenGallery) {
+                            Icon(Icons.Filled.PhotoLibrary, contentDescription = "گالری تصاویر این تعزیه")
+                        }
+                    }
+                    if (showPdf) {
                         IconButton(onClick = onExportPdf) {
                             Icon(Icons.Filled.Share, contentDescription = "خروجی PDF کل تعزیه")
                         }

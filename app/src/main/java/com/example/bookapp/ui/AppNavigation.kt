@@ -415,6 +415,7 @@ fun AppNavigation(
                 readCount = Prefs.getReadSectionsCount(context),
                 streakDays = Prefs.getStreakDays(context),
                 activeDaysLast14 = Prefs.getActiveDaysLast(context, 14),
+                showAppIntro = featureEnabled("appIntro"),
                 onBack = { navController.popBackStack() }
             )
         }
@@ -845,7 +846,7 @@ fun AppNavigation(
 
         if (featureEnabled("read")) composable(ROUTE_ROLES) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
-            val taziehTitle = backStackEntry.arguments?.getString("taziehTitle") ?: ""
+            val taziehTitle = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("taziehTitle") ?: "", "UTF-8")
             var roles by remember { mutableStateOf(listOf<com.example.bookapp.data.RoleEntity>()) }
             var myRoleId by remember { mutableStateOf<Long?>(null) }
             var roleItems by remember { mutableStateOf(listOf<ProfessionalRoleItem>()) }
@@ -922,6 +923,8 @@ fun AppNavigation(
                         com.example.bookapp.data.exportTaziehToPdf(context, taziehTitle, rolesWithSections)
                     }
                 },
+                onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId/${java.net.URLEncoder.encode(taziehTitle, "UTF-8")}") },
+                showGallery = featureEnabled("gallery"),
                 onRename = { item, newTitle ->
                     scope.launch {
                         db.roleDao().updateTitle(item.roleId, newTitle)
@@ -1070,7 +1073,8 @@ fun AppNavigation(
                     }
                 },
                 onBack = { navController.popBackStack() },
-                readOnly = publicViewer
+                readOnly = publicViewer,
+                showPdf = featureEnabled("pdf")
             )
             if (showAddTurn && !publicViewer) {
                 var chosen by remember { mutableStateOf<SectionPickerItem?>(null) }
@@ -1105,7 +1109,7 @@ fun AppNavigation(
 
         composable(ROUTE_TAZIEH_GALLERY) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
-            val taziehTitle = backStackEntry.arguments?.getString("taziehTitle") ?: ""
+            val taziehTitle = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("taziehTitle") ?: "", "UTF-8")
             var images by remember { mutableStateOf(listOf<TaziehImageItem>()) }
             val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -1204,7 +1208,7 @@ fun AppNavigation(
                             icon = { androidx.compose.material3.Icon(Icons.Filled.School, contentDescription = null) },
                             onClick = { navController.navigate("rehearsal/$roleId/$roleTitle") }
                         )
-                        if (!publicViewer) {
+                        if (featureEnabled("pdf")) {
                             Spacer(Modifier.height(10.dp))
                             androidx.compose.material3.ExtendedFloatingActionButton(
                                 text = { androidx.compose.material3.Text("خروجی PDF") },
@@ -1323,25 +1327,20 @@ fun AppNavigation(
                 audioUrl = sectionAudioUrl,
                 relatedSections = relatedSections,
                 onRelatedClick = { related -> navController.navigate("text/${related.sectionId}") },
-                footnotes = footnotes,
-                onAddFootnote = { term, explanation ->
-                    scope.launch {
-                        db.footnoteDao().insert(com.example.bookapp.data.FootnoteEntity(sectionId = sectionId, term = term, explanation = explanation))
-                        reloadFootnotes()
-                    }
-                },
-                onEditFootnote = { fn, term, explanation ->
-                    scope.launch {
+                footnotes = if (featureEnabled("footnotes")) footnotes else emptyList(),
+                onAddFootnote = { term, explanation -> if (featureEnabled("footnotes")) scope.launch {
+                    db.footnoteDao().insert(com.example.bookapp.data.FootnoteEntity(sectionId = sectionId, term = term, explanation = explanation))
+                    reloadFootnotes()
+                } },
+                onEditFootnote = { fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
                         db.footnoteDao().update(fn.copy(term = term, explanation = explanation))
                         reloadFootnotes()
                     }
                 },
-                onDeleteFootnote = { fn ->
-                    scope.launch {
-                        db.footnoteDao().delete(fn.id)
-                        reloadFootnotes()
-                    }
-                },
+                onDeleteFootnote = { fn -> if (featureEnabled("footnotes")) scope.launch {
+                    db.footnoteDao().delete(fn.id)
+                    reloadFootnotes()
+                } },
                 onOpenSearch = { navigateIfAllowed("search", ROUTE_SEARCH) },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
                 fieldTitle = breadcrumb.first,
