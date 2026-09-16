@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +36,8 @@ fun AllImagesGalleryScreen(
     images: List<GalleryImageItem>,
     onBack: () -> Unit
 ) {
+    var previewImage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<GalleryImageItem?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -71,8 +74,9 @@ fun AllImagesGalleryScreen(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(140.dp)
+                                    .height(180.dp)
                                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                                    .clickable { previewImage = image }
                             )
                             Column(Modifier.padding(8.dp)) {
                                 Text(
@@ -91,5 +95,31 @@ fun AllImagesGalleryScreen(
                 }
             }
         }
+    }
+
+    val preview = previewImage
+    if (preview != null) {
+        AlertDialog(
+            onDismissRequest = { previewImage = null },
+            confirmButton = {},
+            dismissButton = {},
+            title = {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(preview.taziehTitle, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { previewImage = null }) { Text("بستن") }
+                }
+            },
+            text = {
+                Box(Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 620.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    AsyncImage(
+                        model = preview.filePath,
+                        contentDescription = preview.caption,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

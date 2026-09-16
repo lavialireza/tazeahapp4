@@ -8,7 +8,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -31,8 +30,6 @@ fun ProfessionalRoleScreen(
     onOpen: (ProfessionalRoleItem) -> Unit,
     onSetMine: (ProfessionalRoleItem) -> Unit,
     onCompare: (ProfessionalRoleItem) -> Unit,
-    onOpenGallery: () -> Unit = {},
-    showGallery: Boolean = true,
     onBack: () -> Unit,
     readOnly: Boolean = false,
     showCompare: Boolean = true
@@ -43,36 +40,12 @@ fun ProfessionalRoleScreen(
     Scaffold(topBar = {
         TopAppBar(
             title = { Text("نقش‌ها: $taziehTitle") },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت") } },
-            actions = {
-                if (showGallery) {
-                    IconButton(onClick = onOpenGallery) {
-                        Icon(Icons.Filled.PhotoLibrary, contentDescription = "گالری تصاویر این تعزیه")
-                    }
-                }
-            }
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت") } }
         )
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth().padding(12.dp), singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text("جستجوی نقش") })
             Text("نقش من با علامت ✓ مشخص است. با انتخاب آن، دسترسی سریع به مطالعه و تمرین خواهید داشت.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-            if (showGallery) {
-                Card(
-                    onClick = onOpenGallery,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("گالری تصاویر این تعزیه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(if (readOnly) "مشاهده تصاویر اختصاصی این تعزیه" else "افزودن و مدیریت تصاویر اختصاصی این تعزیه", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Text("ورود", style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-            }
             LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(filtered, key = { it.id }) { role ->
                     Card(onClick = { onOpen(role) }, modifier = Modifier.fillMaxWidth()) {
