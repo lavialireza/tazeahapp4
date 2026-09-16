@@ -61,6 +61,7 @@ fun TextScreen(
     relatedSections: List<SearchResult> = emptyList(),
     onRelatedClick: (SearchResult) -> Unit = {},
     footnotes: List<FootnoteEntity> = emptyList(),
+    saveError: String? = null,
     onAddFootnote: (term: String, explanation: String) -> Unit = { _, _ -> },
     onEditFootnote: (FootnoteEntity, term: String, explanation: String) -> Unit = { _, _, _ -> },
     onDeleteFootnote: (FootnoteEntity) -> Unit = {},
@@ -376,7 +377,8 @@ fun TextScreen(
                     footnotes = footnotes,
                     onAdd = onAddFootnote,
                     onEdit = onEditFootnote,
-                    onDelete = onDeleteFootnote
+                    onDelete = onDeleteFootnote,
+                    saveError = saveError
                 )
             }
 

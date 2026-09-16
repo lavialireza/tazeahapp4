@@ -1331,18 +1331,21 @@ fun AppNavigation(
                 footnotes = if (featureEnabled("footnotes")) footnotes else emptyList(),
                 saveError = footnoteError,
                 onAddFootnote = { term, explanation -> if (featureEnabled("footnotes")) scope.launch {
+                    footnoteError = null
                     runCatching {
                         db.footnoteDao().insert(com.example.bookapp.data.FootnoteEntity(sectionId = sectionId, term = term.trim(), explanation = explanation.trim()))
                         reloadFootnotes()
                     }.onFailure { footnoteError = "ذخیره پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
                 } },
                 onEditFootnote = { fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
+                    footnoteError = null
                     runCatching {
                         db.footnoteDao().update(fn.copy(term = term.trim(), explanation = explanation.trim()))
                         reloadFootnotes()
                     }.onFailure { footnoteError = "ویرایش پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
                 } },
                 onDeleteFootnote = { fn -> if (featureEnabled("footnotes")) scope.launch {
+                    footnoteError = null
                     runCatching {
                         db.footnoteDao().delete(fn.id)
                         reloadFootnotes()
