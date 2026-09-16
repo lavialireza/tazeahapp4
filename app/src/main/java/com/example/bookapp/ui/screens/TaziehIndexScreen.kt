@@ -103,6 +103,29 @@ fun TaziehIndexScreen(
             contentPadding = PaddingValues(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (showGallery) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onOpenGallery,
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("گالری تصاویر این مجلس", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(
+                                    if (readOnly) "مشاهده تصاویر" else "افزودن و مدیریت تصاویر همین تعزیه",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Text("ورود", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+            }
+
             if (!author.isNullOrBlank() || !authorEmail.isNullOrBlank()) {
                 item {
                     Card(

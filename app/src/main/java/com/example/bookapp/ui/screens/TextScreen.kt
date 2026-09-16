@@ -651,6 +651,7 @@ private fun FootnotesSection(
     if (showDialog) {
         var term by remember { mutableStateOf(editing?.term ?: "") }
         var explanation by remember { mutableStateOf(editing?.explanation ?: "") }
+        var validationError by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text(if (editing == null) "افزودن پاورقی" else "ویرایش پاورقی") },
@@ -658,7 +659,7 @@ private fun FootnotesSection(
                 Column {
                     OutlinedTextField(
                         value = term,
-                        onValueChange = { term = it },
+                        onValueChange = { term = it; validationError = null },
                         label = { Text("واژه یا عبارت") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -666,20 +667,28 @@ private fun FootnotesSection(
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = explanation,
-                        onValueChange = { explanation = it },
+                        onValueChange = { explanation = it; validationError = null },
                         label = { Text("توضیح (معنی، منبع، نکته و ...)") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (validationError != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(validationError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (term.isNotBlank() && explanation.isNotBlank()) {
+                    if (term.isBlank()) {
+                        validationError = "واژه یا عبارت را وارد کنید."
+                    } else if (explanation.isBlank()) {
+                        validationError = "توضیح پاورقی را وارد کنید."
+                    } else {
                         val current = editing
                         if (current == null) onAdd(term.trim(), explanation.trim())
                         else onEdit(current, term.trim(), explanation.trim())
+                        showDialog = false
                     }
-                    showDialog = false
                 }) { Text("ذخیره") }
             },
             dismissButton = {

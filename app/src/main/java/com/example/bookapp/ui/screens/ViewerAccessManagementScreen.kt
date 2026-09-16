@@ -117,15 +117,24 @@ fun ViewerAccessManagementScreen(
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = {
-                                if (installationId.isBlank()) { message = "شناسه نصب را وارد کنید."; return@Button }
+                                val normalizedId = installationId.trim().uppercase(Locale.US)
+                                if (normalizedId.isBlank()) { message = "شناسه نصب را وارد کنید."; return@Button }
                                 val expiry = expiryText.trim().takeIf { it.isNotBlank() }?.let { runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(it)?.time }.getOrNull() }
                                 if (expiryText.isNotBlank() && expiry == null) { message = "تاریخ انقضا معتبر نیست."; return@Button }
-                                ViewerAccessPolicy.upsertSpecialUser(context, ViewerAccessPolicy.SpecialUser(installationId.trim(), profile, expiry, customPermissions))
-                                specialUsers = ViewerAccessPolicy.getSpecialUsers(context); resetEditor(); message = "کاربر خاص ذخیره شد."
-                            }, Modifier.weight(1f)) { Text("ذخیره") }
+                                runCatching {
+                                    ViewerAccessPolicy.upsertSpecialUser(context, ViewerAccessPolicy.SpecialUser(normalizedId, profile, expiry, customPermissions))
+                                    val reloaded = ViewerAccessPolicy.getSpecialUsers(context)
+                                    check(reloaded.any { it.installationId.equals(normalizedId, ignoreCase = true) }) { "شناسه پس از ذخیره پیدا نشد." }
+                                    specialUsers = reloaded
+                                    resetEditor()
+                                    message = "کاربر خاص «$normalizedId» با موفقیت ذخیره شد."
+                                }.onFailure { e ->
+                                    message = "ذخیره کاربر خاص انجام نشد: ${e.message ?: "خطای نامشخص"}"
+                                }
+                            }, Modifier.weight(1f)) { Text("ذخیره و اعمال") }
                             OutlinedButton(onClick = { resetEditor() }, Modifier.weight(1f)) { Text("جدید") }
                         }
-                        if (installationId.isNotBlank() && specialUsers.any { it.installationId == installationId.trim() }) {
+                        if (installationId.isNotBlank() && specialUsers.any { it.installationId.equals(installationId.trim(), ignoreCase = true) }) {
                             Spacer(Modifier.height(8.dp))
                             OutlinedButton(onClick = { exportTarget = installationId.trim(); exportLauncher.launch("viewer-access-${installationId.trim()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست این Viewer") }
                             Button(onClick = { sendDirectlyToViewer(installationId.trim()) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(6.dp)); Text("ارسال مستقیم به همین Viewer") }

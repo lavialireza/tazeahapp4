@@ -144,7 +144,11 @@ object ViewerAccessPolicy {
     }
 
     fun removeSpecialUser(context: Context, installationId: String) {
-        saveSpecialUsers(context, getSpecialUsers(context).filterNot { it.installationId == installationId })
+        val normalizedId = installationId.trim().uppercase(java.util.Locale.US)
+        saveSpecialUsers(context, getSpecialUsers(context).filterNot { it.installationId.trim().uppercase(java.util.Locale.US) == normalizedId })
+        check(getSpecialUsers(context).none { it.installationId.trim().uppercase(java.util.Locale.US) == normalizedId }) {
+            "حذف کاربر خاص انجام نشد."
+        }
     }
 
     fun installationId(context: Context): String {
