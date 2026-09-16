@@ -45,7 +45,8 @@ fun TaziehGalleryScreen(
 ) {
     var editingImage by remember { mutableStateOf<TaziehImageItem?>(null) }
     var captionText by remember { mutableStateOf("") }
-    var previewImage by remember { mutableStateOf<TaziehImageItem?>(null) }
+    val previewImageState = remember { mutableStateOf<TaziehImageItem?>(null) }
+    val previewImage = previewImageState.value
 
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -96,7 +97,7 @@ fun TaziehGalleryScreen(
                                     .fillMaxWidth()
                                     .height(180.dp)
                                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                                    .clickable { previewImage = image }
+                                    .clickable { previewImageState.value = image }
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -126,13 +127,13 @@ fun TaziehGalleryScreen(
     val preview = previewImage
     if (preview != null) {
         AlertDialog(
-            onDismissRequest = { previewImage = null },
+            onDismissRequest = { previewImageState.value = null },
             confirmButton = {},
             dismissButton = {},
             title = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(preview.caption.ifBlank { "تصویر" }, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { previewImage = null }) {
+                    IconButton(onClick = { previewImageState.value = null }) {
                         Icon(Icons.Filled.Close, contentDescription = "بستن")
                     }
                 }

@@ -36,7 +36,8 @@ fun AllImagesGalleryScreen(
     images: List<GalleryImageItem>,
     onBack: () -> Unit
 ) {
-    var previewImage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<GalleryImageItem?>(null) }
+    val previewImageState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<GalleryImageItem?>(null) }
+    val previewImage = previewImageState.value
 
     Scaffold(
         topBar = {
@@ -76,7 +77,7 @@ fun AllImagesGalleryScreen(
                                     .fillMaxWidth()
                                     .height(180.dp)
                                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                                    .clickable { previewImage = image }
+                                    .clickable { previewImageState.value = image }
                             )
                             Column(Modifier.padding(8.dp)) {
                                 Text(
@@ -99,27 +100,33 @@ fun AllImagesGalleryScreen(
 
     val preview = previewImage
     if (preview != null) {
-        AlertDialog(
-            onDismissRequest = { previewImage = null },
-            confirmButton = {},
-            dismissButton = {},
-            title = {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(preview.taziehTitle, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { previewImage = null }) { Text("بستن") }
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { previewImageState.value = null },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                Card(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(12.dp)) {
+                    Box(Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = preview.filePath,
+                            contentDescription = preview.caption,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        TextButton(
+                            onClick = { previewImageState.value = null },
+                            modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd)
+                        ) { Text("بستن") }
+                    }
                 }
-            },
-            text = {
-                Box(Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 620.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    AsyncImage(
-                        model = preview.filePath,
-                        contentDescription = preview.caption,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+            }
+        }
     }
 }
