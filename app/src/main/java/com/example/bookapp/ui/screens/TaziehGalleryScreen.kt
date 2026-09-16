@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import java.io.File
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,12 +43,12 @@ fun TaziehGalleryScreen(
     onDeleteImage: (TaziehImageItem) -> Unit,
     onUpdateCaption: (TaziehImageItem, String) -> Unit,
     readOnly: Boolean = false,
+    errorMessage: String? = null,
     onBack: () -> Unit
 ) {
     var editingImage by remember { mutableStateOf<TaziehImageItem?>(null) }
     var captionText by remember { mutableStateOf("") }
-    val previewImageState = remember { mutableStateOf<TaziehImageItem?>(null) }
-    val previewImage = previewImageState.value
+    var previewImage by remember { mutableStateOf<TaziehImageItem?>(null) }
 
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -71,8 +73,17 @@ fun TaziehGalleryScreen(
             )
         }
     ) { padding ->
-        if (images.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (!errorMessage.isNullOrBlank()) {
+                Text(
+                    errorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            if (images.isEmpty()) {
+            Box(Modifier.fillMaxWidth().weight(1f).padding(24.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text(
                     if (readOnly) "هنوز عکسی برای این مجلس ثبت نشده است." else "برای همین مجلس از دکمه «افزودن عکس» در پایین صفحه عکس انتخاب کنید.\nمثلاً عکس نسخه‌ی خطی یا تعزیه‌خوانان.",
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -84,7 +95,7 @@ fun TaziehGalleryScreen(
                 contentPadding = PaddingValues(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize().padding(padding)
+                modifier = Modifier.fillMaxWidth().weight(1f)
             ) {
                 items(images, key = { it.id }) { image ->
                     Card(shape = RoundedCornerShape(12.dp)) {
@@ -97,7 +108,7 @@ fun TaziehGalleryScreen(
                                     .fillMaxWidth()
                                     .height(180.dp)
                                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                                    .clickable { previewImageState.value = image }
+                                    .clickable { previewImage = image }
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -123,33 +134,39 @@ fun TaziehGalleryScreen(
             }
         }
     }
+    }
 
     val preview = previewImage
     if (preview != null) {
-        AlertDialog(
-            onDismissRequest = { previewImageState.value = null },
-            confirmButton = {},
-            dismissButton = {},
-            title = {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(preview.caption.ifBlank { "تصویر" }, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { previewImageState.value = null }) {
-                        Icon(Icons.Filled.Close, contentDescription = "بستن")
-                    }
+        Dialog(
+            onDismissRequest = { previewImage = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                AsyncImage(
+                    model = File(preview.filePath),
+                    contentDescription = preview.caption,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+                IconButton(
+                    onClick = { previewImage = null },
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = "بستن")
                 }
-            },
-            text = {
-                Box(Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 620.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    AsyncImage(
-                        model = File(preview.filePath),
-                        contentDescription = preview.caption,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+            }
+        }
     }
 
     val current = editingImage
