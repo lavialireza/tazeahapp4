@@ -923,12 +923,7 @@ fun AppNavigation(
                         com.example.bookapp.data.exportTaziehToPdf(context, taziehTitle, rolesWithSections)
                     }
                 },
-                onOpenGallery = {
-                    if (featureEnabled("gallery")) {
-                        val encodedTitle = java.net.URLEncoder.encode(taziehTitle, "UTF-8")
-                        navController.navigate("tazieh_gallery/$taziehId/$encodedTitle")
-                    }
-                },
+                onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId/${java.net.URLEncoder.encode(taziehTitle, "UTF-8")}") },
                 showGallery = featureEnabled("gallery"),
                 onRename = { item, newTitle ->
                     scope.launch {

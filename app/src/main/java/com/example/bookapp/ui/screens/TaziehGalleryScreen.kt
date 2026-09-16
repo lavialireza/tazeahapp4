@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import java.io.File
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -86,7 +87,7 @@ fun TaziehGalleryScreen(
                     Card(shape = RoundedCornerShape(12.dp)) {
                         Column {
                             AsyncImage(
-                                model = image.filePath,
+                                model = File(image.filePath),
                                 contentDescription = image.caption,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier

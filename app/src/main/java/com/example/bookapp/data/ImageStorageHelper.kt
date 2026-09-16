@@ -23,16 +23,18 @@ fun copyImageToAppStorage(context: Context, sourceUri: Uri): String? {
         val bitmap = decodeSampledBitmap(context, sourceUri, maxDimension = 1600)
         if (bitmap != null) {
             destFile.outputStream().use { output ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, output)
+                check(bitmap.compress(Bitmap.CompressFormat.JPEG, 80, output)) { "ذخیره تصویر ناموفق بود." }
             }
             bitmap.recycle()
         } else {
             // اگر رمزگشایی به‌عنوان تصویر ممکن نبود، فایل خام کپی می‌شود (بدون فشرده‌سازی)
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+            val copied = context.contentResolver.openInputStream(sourceUri)?.use { input ->
                 destFile.outputStream().use { output -> input.copyTo(output) }
-            }
+            } ?: 0L
+            check(copied > 0L) { "فایل تصویر قابل خواندن نیست." }
         }
-        if (destFile.exists() && destFile.length() > 0L) destFile.absolutePath else null
+        check(destFile.exists() && destFile.length() > 0L) { "فایل تصویر در حافظه برنامه ایجاد نشد." }
+        destFile.absolutePath
     } catch (e: Exception) {
         null
     }
