@@ -114,9 +114,9 @@ fun TaziehIndexScreen(
                             Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("گالری تصاویر این مجلس", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("گالری تصاویر همین تعزیه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text(
-                                    if (readOnly) "مشاهده تصاویر" else "افزودن و مدیریت تصاویر همین تعزیه",
+                                    if (readOnly) "مشاهده تصاویر همین تعزیه" else "افزودن و مدیریت تصاویر همین تعزیه",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }

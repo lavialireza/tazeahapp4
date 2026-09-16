@@ -32,7 +32,7 @@ fun copyImageToAppStorage(context: Context, sourceUri: Uri): String? {
                 destFile.outputStream().use { output -> input.copyTo(output) }
             }
         }
-        destFile.absolutePath
+        if (destFile.exists() && destFile.length() > 0L) destFile.absolutePath else null
     } catch (e: Exception) {
         null
     }
