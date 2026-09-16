@@ -40,6 +40,7 @@ fun TaziehGalleryScreen(
     onDeleteImage: (TaziehImageItem) -> Unit,
     onUpdateCaption: (TaziehImageItem, String) -> Unit,
     readOnly: Boolean = false,
+    errorMessage: String? = null,
     onBack: () -> Unit
 ) {
     var editingImage by remember { mutableStateOf<TaziehImageItem?>(null) }
@@ -68,8 +69,17 @@ fun TaziehGalleryScreen(
             )
         }
     ) { padding ->
-        if (images.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (!errorMessage.isNullOrBlank()) {
+                Text(
+                    errorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            if (images.isEmpty()) {
+            Box(Modifier.fillMaxWidth().weight(1f).padding(24.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text(
                     if (readOnly) "هنوز عکسی برای این مجلس ثبت نشده است." else "برای همین مجلس از دکمه «افزودن عکس» در پایین صفحه عکس انتخاب کنید.\nمثلاً عکس نسخه‌ی خطی یا تعزیه‌خوانان.",
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -81,7 +91,7 @@ fun TaziehGalleryScreen(
                 contentPadding = PaddingValues(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize().padding(padding)
+                modifier = Modifier.fillMaxWidth().weight(1f)
             ) {
                 items(images, key = { it.id }) { image ->
                     Card(shape = RoundedCornerShape(12.dp)) {
@@ -118,6 +128,7 @@ fun TaziehGalleryScreen(
                 }
             }
         }
+    }
     }
 
     val current = editingImage
