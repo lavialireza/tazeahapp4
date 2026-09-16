@@ -126,8 +126,11 @@ fun ViewerAccessManagementScreen(
                                     val reloaded = ViewerAccessPolicy.getSpecialUsers(context)
                                     check(reloaded.any { it.installationId.equals(normalizedId, ignoreCase = true) }) { "شناسه پس از ذخیره پیدا نشد." }
                                     specialUsers = reloaded
-                                    resetEditor()
-                                    message = "کاربر خاص «$normalizedId» با موفقیت ذخیره شد."
+                                    // فرم را پاک نمی‌کنیم تا کاربر بلافاصله اطلاعات ذخیره‌شده را ببیند
+                                    // و بتواند در صورت نیاز همان رکورد را دوباره ویرایش کند.
+                                    selectedUser = reloaded.firstOrNull { it.installationId.equals(normalizedId, ignoreCase = true) }
+                                    installationId = normalizedId
+                                    message = "کاربر خاص «$normalizedId» واقعاً در حافظه برنامه ذخیره و بازیابی شد."
                                 }.onFailure { e ->
                                     message = "ذخیره کاربر خاص انجام نشد: ${e.message ?: "خطای نامشخص"}"
                                 }

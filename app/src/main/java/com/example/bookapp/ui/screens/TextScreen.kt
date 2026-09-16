@@ -599,7 +599,8 @@ private fun FootnotesSection(
     footnotes: List<FootnoteEntity>,
     onAdd: (term: String, explanation: String) -> Unit,
     onEdit: (FootnoteEntity, term: String, explanation: String) -> Unit,
-    onDelete: (FootnoteEntity) -> Unit
+    onDelete: (FootnoteEntity) -> Unit,
+    saveError: String? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<FootnoteEntity?>(null) }
@@ -646,6 +647,11 @@ private fun FootnotesSection(
                 }
             }
         }
+    }
+
+    if (saveError != null) {
+        Spacer(Modifier.height(6.dp))
+        Text(saveError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
     }
 
     if (showDialog) {

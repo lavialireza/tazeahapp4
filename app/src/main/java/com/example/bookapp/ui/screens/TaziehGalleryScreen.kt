@@ -70,7 +70,7 @@ fun TaziehGalleryScreen(
         if (images.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text(
-                    "هنوز عکسی اضافه نشده.\nمثلاً عکس نسخه‌ی خطی قدیمی یا یک تعزیه‌خوان معروف این تعزیه را اضافه کنید.",
+                    if (readOnly) "هنوز عکسی برای این مجلس ثبت نشده است." else "برای همین مجلس از دکمه «افزودن عکس» در پایین صفحه عکس انتخاب کنید.\nمثلاً عکس نسخه‌ی خطی یا تعزیه‌خوانان.",
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }

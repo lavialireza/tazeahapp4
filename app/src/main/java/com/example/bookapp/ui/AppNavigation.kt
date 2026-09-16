@@ -1289,6 +1289,7 @@ fun AppNavigation(
             var relatedSections by remember { mutableStateOf(listOf<com.example.bookapp.data.SearchResult>()) }
             var sectionAudioUrl by remember { mutableStateOf<String?>(null) }
             var footnotes by remember { mutableStateOf(listOf<com.example.bookapp.data.FootnoteEntity>()) }
+            var footnoteError by remember { mutableStateOf<String?>(null) }
             var siblingSections by remember { mutableStateOf(listOf<com.example.bookapp.data.SectionEntity>()) }
             var siblingIndex by remember { mutableStateOf(-1) }
             var breadcrumb by remember { mutableStateOf(Triple<String?, String?, String?>(null, null, null)) }
@@ -1328,18 +1329,24 @@ fun AppNavigation(
                 relatedSections = relatedSections,
                 onRelatedClick = { related -> navController.navigate("text/${related.sectionId}") },
                 footnotes = if (featureEnabled("footnotes")) footnotes else emptyList(),
+                saveError = footnoteError,
                 onAddFootnote = { term, explanation -> if (featureEnabled("footnotes")) scope.launch {
-                    db.footnoteDao().insert(com.example.bookapp.data.FootnoteEntity(sectionId = sectionId, term = term, explanation = explanation))
-                    reloadFootnotes()
+                    runCatching {
+                        db.footnoteDao().insert(com.example.bookapp.data.FootnoteEntity(sectionId = sectionId, term = term.trim(), explanation = explanation.trim()))
+                        reloadFootnotes()
+                    }.onFailure { footnoteError = "ذخیره پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
                 } },
                 onEditFootnote = { fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
-                        db.footnoteDao().update(fn.copy(term = term, explanation = explanation))
+                    runCatching {
+                        db.footnoteDao().update(fn.copy(term = term.trim(), explanation = explanation.trim()))
                         reloadFootnotes()
-                    }
-                },
+                    }.onFailure { footnoteError = "ویرایش پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
+                } },
                 onDeleteFootnote = { fn -> if (featureEnabled("footnotes")) scope.launch {
-                    db.footnoteDao().delete(fn.id)
-                    reloadFootnotes()
+                    runCatching {
+                        db.footnoteDao().delete(fn.id)
+                        reloadFootnotes()
+                    }.onFailure { footnoteError = "حذف پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
                 } },
                 onOpenSearch = { navigateIfAllowed("search", ROUTE_SEARCH) },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
