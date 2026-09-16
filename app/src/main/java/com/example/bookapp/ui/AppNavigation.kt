@@ -92,7 +92,7 @@ private const val ROUTE_TAZIEH_INDEX = "tazieh_index/{taziehId}/{taziehTitle}"
 private const val ROUTE_DIALOGUES = "dialogues/{taziehId}/{taziehTitle}"
 private const val ROUTE_DIALOGUE_BUILDER = "dialogue_builder/{taziehId}/{taziehTitle}"
 private const val ROUTE_DIALOGUE_READER = "dialogue_reader/{dialogueId}"
-private const val ROUTE_TAZIEH_GALLERY = "tazieh_gallery/{taziehId}"
+private const val ROUTE_TAZIEH_GALLERY = "tazieh_gallery/{taziehId}/{taziehTitle}"
 private const val ROUTE_TEXT = "text/{sectionId}"
 private const val ROUTE_TEXT_PAGER = "text_pager/{roleId}/{startIndex}"
 private const val ROUTE_COMPARE = "compare/{taziehId}"
@@ -839,11 +839,7 @@ fun AppNavigation(
             TaziehCatalogScreen(
                 items = catalog,
                 initialFieldId = fieldId,
-                onOpen = { item -> navController.navigate("roles/${item.id}/${java.net.URLEncoder.encode(item.title, "UTF-8")}") },
-                onOpenGallery = { item ->
-                    if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/${item.id}")
-                },
-                showGallery = featureEnabled("gallery"),
+                onOpen = { item -> navController.navigate("roles/${item.id}/${item.title}") },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -882,8 +878,6 @@ fun AppNavigation(
                     scope.launch { reloadRoles() }
                 },
                 onCompare = { navController.navigate("compare/$taziehId") },
-                onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId") },
-                showGallery = featureEnabled("gallery"),
                 onBack = { navController.popBackStack() },
                 readOnly = publicViewer,
                 showCompare = featureEnabled("compare")
@@ -929,7 +923,7 @@ fun AppNavigation(
                         com.example.bookapp.data.exportTaziehToPdf(context, taziehTitle, rolesWithSections)
                     }
                 },
-                onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId") },
+                onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId/${java.net.URLEncoder.encode(taziehTitle, "UTF-8")}") },
                 showGallery = featureEnabled("gallery"),
                 onRename = { item, newTitle ->
                     scope.launch {
@@ -1115,9 +1109,8 @@ fun AppNavigation(
 
         composable(ROUTE_TAZIEH_GALLERY) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
-            var taziehTitle by remember { mutableStateOf("تعزیه") }
+            val taziehTitle = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("taziehTitle") ?: "", "UTF-8")
             var images by remember { mutableStateOf(listOf<TaziehImageItem>()) }
-            var galleryError by remember { mutableStateOf<String?>(null) }
             val scope = androidx.compose.runtime.rememberCoroutineScope()
 
             suspend fun reloadImages() {
@@ -1125,29 +1118,17 @@ fun AppNavigation(
                     TaziehImageItem(it.id, it.filePath, it.caption)
                 }
             }
-            LaunchedEffect(taziehId) {
-                taziehTitle = db.taziehDao().getById(taziehId)?.title.orEmpty().ifBlank { "تعزیه" }
-                reloadImages()
-            }
+            LaunchedEffect(taziehId) { reloadImages() }
 
             TaziehGalleryScreen(
                 taziehTitle = taziehTitle,
                 images = images,
                 onAddImage = { uri ->
                     scope.launch {
-                        galleryError = null
-                        runCatching {
-                            check(db.taziehDao().getById(taziehId) != null) { "تعزیه انتخاب‌شده پیدا نشد." }
-                            val path = com.example.bookapp.data.copyImageToAppStorage(context, uri)
-                                ?: error("تصویر از گالری گوشی خوانده نشد یا در حافظه برنامه ذخیره نشد.")
-                            val id = db.taziehImageDao().insert(
-                                com.example.bookapp.data.TaziehImageEntity(taziehId = taziehId, filePath = path)
-                            )
-                            check(id > 0L) { "ثبت تصویر در پایگاه داده انجام نشد." }
+                        val path = com.example.bookapp.data.copyImageToAppStorage(context, uri)
+                        if (path != null) {
+                            db.taziehImageDao().insert(com.example.bookapp.data.TaziehImageEntity(taziehId = taziehId, filePath = path))
                             reloadImages()
-                        }.onFailure { e ->
-                            galleryError = e.message ?: "افزودن تصویر ناموفق بود."
-                            android.util.Log.e("TaziehGallery", "افزودن تصویر ناموفق بود", e)
                         }
                     }
                 },
@@ -1165,7 +1146,6 @@ fun AppNavigation(
                     }
                 },
                 readOnly = publicViewer,
-                errorMessage = galleryError,
                 onBack = { navController.popBackStack() }
             )
         }

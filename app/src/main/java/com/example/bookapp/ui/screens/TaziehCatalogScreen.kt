@@ -7,7 +7,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,8 +29,6 @@ data class TaziehCatalogItem(
 fun TaziehCatalogScreen(
     items: List<TaziehCatalogItem>,
     onOpen: (TaziehCatalogItem) -> Unit,
-    onOpenGallery: (TaziehCatalogItem) -> Unit = {},
-    showGallery: Boolean = true,
     onBack: () -> Unit,
     initialFieldId: Long? = null
 ) {
@@ -99,27 +96,10 @@ fun TaziehCatalogScreen(
                     items(filtered, key = { it.id }) { item ->
                         Card(onClick = { onOpen(item) }, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp)) {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        Text(item.fieldTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                    }
-                                    if (showGallery) {
-                                        IconButton(onClick = { onOpenGallery(item) }) {
-                                            Icon(Icons.Filled.PhotoLibrary, contentDescription = "گالری تصاویر ${item.title}")
-                                        }
-                                    }
-                                }
+                                Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(item.fieldTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 if (!item.author.isNullOrBlank()) Text("نویسنده: ${item.author}", style = MaterialTheme.typography.bodySmall)
                                 Text("${item.roleCount} نقش${if (item.hasAudio) "  •  صوت دارد" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (showGallery) {
-                                    Spacer(Modifier.height(6.dp))
-                                    TextButton(onClick = { onOpenGallery(item) }) {
-                                        Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("گالری تصاویر همین تعزیه")
-                                    }
-                                }
                             }
                         }
                     }
