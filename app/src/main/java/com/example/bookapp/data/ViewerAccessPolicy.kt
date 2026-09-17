@@ -79,9 +79,24 @@ object ViewerAccessPolicy {
             .apply()
     }
 
-    internal fun setImportedSpecialPermissions(context: Context, permissions: Map<String, Boolean>, expiresAt: Long?, version: Int) {
+    internal fun setImportedSpecialPermissions(
+        context: Context,
+        permissions: Map<String, Boolean>,
+        expiresAt: Long?,
+        version: Int,
+        profile: String = PROFILE_CUSTOM
+    ) {
         val id = installationId(context)
-        upsertSpecialUser(context, SpecialUser(id, PROFILE_CUSTOM, expiresAt, permissions))
+        // پروفایل صادرشده از Admin نیز همراه سیاست منتقل می‌شود تا Viewer
+        // هنگام دریافت سیاست، پروفایل واقعی کاربر خاص را به «سفارشی» تبدیل نکند.
+        val normalizedProfile = when (profile) {
+            PROFILE_PUBLIC, PROFILE_TRAINING, PROFILE_COLLABORATOR, PROFILE_CUSTOM -> profile
+            else -> PROFILE_CUSTOM
+        }
+        upsertSpecialUser(context, SpecialUser(id, normalizedProfile, expiresAt, permissions))
+        check(getSpecialUsers(context).firstOrNull { it.installationId == id }?.profile == normalizedProfile) {
+            "پروفایل کاربر خاص پس از اعمال سیاست قابل بازیابی نیست."
+        }
     }
 
     fun getPublicPermissions(context: Context): Map<String, Boolean> {

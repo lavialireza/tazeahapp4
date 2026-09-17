@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.ContentCopy
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +21,7 @@ import com.example.bookapp.data.ViewerAccessTransfer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.content.ClipData
 import androidx.compose.material3.ExperimentalMaterial3Api
 
 @Composable
@@ -36,6 +38,7 @@ fun ViewerAccessManagementScreen(
     var expiryText by remember { mutableStateOf("") }
     var customPermissions by remember { mutableStateOf(ViewerAccessPolicy.profileDefaults(profile)) }
     var message by remember { mutableStateOf<String?>(null) }
+    var accessTestMessage by remember { mutableStateOf<String?>(null) }
     var exportTarget by remember { mutableStateOf("*") }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -120,7 +123,7 @@ fun ViewerAccessManagementScreen(
                             Button(onClick = {
                                 val normalizedId = installationId.trim().uppercase(Locale.US)
                                 if (normalizedId.isBlank()) { message = "شناسه نصب را وارد کنید."; return@Button }
-                                val expiry = expiryText.trim().takeIf { it.isNotBlank() }?.let { runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(it)?.time }.getOrNull() }
+                                val expiry = expiryText.trim().takeIf { it.isNotBlank() }?.let { raw -> runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(raw)?.time }.getOrNull() }
                                 if (expiryText.isNotBlank() && expiry == null) { message = "تاریخ انقضا معتبر نیست."; return@Button }
                                 runCatching {
                                     ViewerAccessPolicy.upsertSpecialUser(context, ViewerAccessPolicy.SpecialUser(normalizedId, profile, expiry, customPermissions))
@@ -136,7 +139,31 @@ fun ViewerAccessManagementScreen(
                                     message = "ذخیره کاربر خاص انجام نشد: ${e.message ?: "خطای نامشخص"}"
                                 }
                             }, Modifier.weight(1f)) { Text("ذخیره و اعمال") }
-                            OutlinedButton(onClick = { resetEditor() }, Modifier.weight(1f)) { Text("جدید") }
+                            OutlinedButton(onClick = { resetEditor(); accessTestMessage = null }, Modifier.weight(1f)) { Text("جدید") }
+                        }
+                        if (installationId.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = {
+                                    val id = installationId.trim().uppercase(Locale.US)
+                                    val match = ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId == id }
+                                    accessTestMessage = if (match == null) {
+                                        "نتیجه آزمون: شناسه «$id» در فهرست کاربران خاص ذخیره نشده است."
+                                    } else {
+                                        val expired = match.expiresAt != null && match.expiresAt > 0L && System.currentTimeMillis() > match.expiresAt
+                                        val active = match.permissions.count { it.value }
+                                        if (expired) "نتیجه آزمون: شناسه «$id» پیدا شد، اما دسترسی آن منقضی شده است."
+                                        else "نتیجه آزمون: شناسه «$id» پیدا شد و فعال است؛ $active قابلیت فعال دارد."
+                                    }
+                                }, Modifier.weight(1f)) { Text("آزمون دسترسی") }
+                                OutlinedButton(onClick = {
+                                    val id = installationId.trim().uppercase(Locale.US)
+                                    val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                                    clipboard?.setPrimaryClip(ClipData.newPlainText("شناسه نصب Viewer", id))
+                                    message = "شناسه «$id» در کلیپ‌بورد کپی شد."
+                                }, Modifier.weight(1f)) { Icon(Icons.Filled.ContentCopy, null); Spacer(Modifier.width(4.dp)); Text("کپی شناسه") }
+                            }
+                            accessTestMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                         }
                         if (installationId.isNotBlank() && specialUsers.any { it.installationId.equals(installationId.trim(), ignoreCase = true) }) {
                             Spacer(Modifier.height(8.dp))

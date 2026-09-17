@@ -23,18 +23,20 @@ object ViewerAccessTransfer {
 
     fun buildPolicyJson(context: Context, targetInstallationId: String): String {
         val target = targetInstallationId.ifBlank { TARGET_PUBLIC }
+        val specialUser = if (target == TARGET_PUBLIC) null else
+            ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId == target }
         val permissions = if (target == TARGET_PUBLIC) {
             ViewerAccessPolicy.getPublicPermissions(context)
         } else {
-            ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId == target }?.permissions
-                ?: throw IllegalArgumentException("کاربر موردنظر پیدا نشد.")
+            specialUser?.permissions ?: throw IllegalArgumentException("کاربر موردنظر پیدا نشد.")
         }
         val root = JSONObject()
             .put("schema", SCHEMA)
             .put("targetInstallationId", target)
             .put("policyVersion", ViewerAccessPolicy.getPolicyVersion(context))
             .put("issuedAt", System.currentTimeMillis())
-            .put("expiresAt", if (target == TARGET_PUBLIC) JSONObject.NULL else ViewerAccessPolicy.getSpecialUsers(context).first { it.installationId == target }.expiresAt ?: JSONObject.NULL)
+            .put("expiresAt", if (target == TARGET_PUBLIC) JSONObject.NULL else specialUser?.expiresAt ?: JSONObject.NULL)
+            .put("profile", if (target == TARGET_PUBLIC) ViewerAccessPolicy.PROFILE_PUBLIC else specialUser?.profile ?: ViewerAccessPolicy.PROFILE_CUSTOM)
         val p = JSONObject(); ViewerAccessPolicy.permissionLabels.keys.forEach { p.put(it, permissions[it] == true) }
         root.put("permissions", p)
         val unsigned = root.toString()
@@ -66,8 +68,13 @@ object ViewerAccessTransfer {
         require(expiresAt == null || expiresAt <= 0L || System.currentTimeMillis() <= expiresAt) { "تاریخ اعتبار این سیاست گذشته است." }
         val p = payload.getJSONObject("permissions")
         val permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { p.optBoolean(it, false) }
-        if (target == TARGET_PUBLIC) ViewerAccessPolicy.setImportedPublicPermissions(context, permissions, payload.optInt("policyVersion", 1))
-        else ViewerAccessPolicy.setImportedSpecialPermissions(context, permissions, expiresAt, payload.optInt("policyVersion", 1))
+        val version = payload.optInt("policyVersion", 1)
+        if (target == TARGET_PUBLIC) {
+            ViewerAccessPolicy.setImportedPublicPermissions(context, permissions, version)
+        } else {
+            val profile = payload.optString("profile", ViewerAccessPolicy.PROFILE_CUSTOM)
+            ViewerAccessPolicy.setImportedSpecialPermissions(context, permissions, expiresAt, version, profile)
+        }
         "سیاست دسترسی با موفقیت اعمال شد."
     }
 }

@@ -420,6 +420,37 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
                 HorizontalDivider()
                 Spacer(Modifier.height(16.dp))
+                Text("وضعیت دسترسی این Viewer", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(6.dp))
+                val viewerInstallationId = com.example.bookapp.data.ViewerAccessPolicy.installationId(context)
+                val effectivePermissions = com.example.bookapp.data.ViewerAccessPolicy.getEffectivePermissions(context)
+                val specialMatch = com.example.bookapp.data.ViewerAccessPolicy.getSpecialUsers(context)
+                    .firstOrNull { it.installationId == viewerInstallationId }
+                val accessSource = if (specialMatch != null && (specialMatch.expiresAt == null || specialMatch.expiresAt <= 0L || System.currentTimeMillis() <= specialMatch.expiresAt)) {
+                    "کاربر خاص"
+                } else {
+                    "پروفایل عمومی"
+                }
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("شناسه نصب: $viewerInstallationId", style = MaterialTheme.typography.bodyMedium)
+                        Text("منبع دسترسی: $accessSource", style = MaterialTheme.typography.bodyMedium)
+                        Text("قابلیت‌های فعال: ${effectivePermissions.count { it.value }} از ${effectivePermissions.size}", style = MaterialTheme.typography.bodySmall)
+                        specialMatch?.let {
+                            Text(
+                                "پروفایل کاربر خاص: ${it.profile}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "انقضا: ${it.expiresAt?.let { ts -> java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(ts)) } ?: "بدون انقضا"}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+                Spacer(Modifier.height(16.dp))
                 Text("مجوزهای Viewer", style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.height(4.dp))
                 Text("فایل سیاستی را که از برنامه مدیر دریافت کرده‌اید انتخاب کنید تا قابلیت‌های این Viewer فعال یا غیرفعال شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
