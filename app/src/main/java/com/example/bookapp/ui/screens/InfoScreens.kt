@@ -434,6 +434,42 @@ fun SettingsScreen(
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text("شناسه نصب: $viewerInstallationId", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "این شناسه را برای مدیر/ادمین ارسال کنید تا دسترسی اختصاصی برای همین Viewer صادر شود.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(
+                                            android.content.Intent.EXTRA_TEXT,
+                                            "شناسه نصب Viewer من: $viewerInstallationId\n\nلطفاً این شناسه را برای صدور دسترسی اختصاصی استفاده کنید."
+                                        )
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "ارسال شناسه نصب"))
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("ارسال شناسه")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        android.content.ClipData.newPlainText("شناسه نصب Viewer", viewerInstallationId)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("کپی شناسه")
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
                         Text("منبع دسترسی: $accessSource", style = MaterialTheme.typography.bodyMedium)
                         Text("قابلیت‌های فعال: ${effectivePermissions.count { it.value }} از ${effectivePermissions.size}", style = MaterialTheme.typography.bodySmall)
                         specialMatch?.let {
