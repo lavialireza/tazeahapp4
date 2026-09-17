@@ -264,8 +264,7 @@ private fun SpecialUserReportDialog(user: ViewerAccessPolicy.SpecialUser, dateFo
             item { Text("مجوزهای فعال: ${user.permissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}") }
             items(ViewerAccessPolicy.permissionLabels.toList().filter { user.permissions[it.first] == true }) { Text("✓ ${it.second}") }
             item { Text("سوابق مرتبط: ${history.size} مورد", style = MaterialTheme.typography.titleSmall) }
-            items(history) { h -> Text("${dateFormat.format(Date(h.timestamp))} — ${h.action}
-${h.details}", style = MaterialTheme.typography.bodySmall) }
+            items(history) { h -> Text("${dateFormat.format(Date(h.timestamp))} — ${h.action}\n${h.details}", style = MaterialTheme.typography.bodySmall) }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("بستن") } })
 }
