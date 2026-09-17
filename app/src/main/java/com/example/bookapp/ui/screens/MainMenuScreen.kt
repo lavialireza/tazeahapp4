@@ -54,6 +54,8 @@ fun MainMenuScreen(
     onOpenViewerAccessManagement: () -> Unit,
     showSpecialUsersManagement: Boolean,
     onOpenSpecialUsersManagement: () -> Unit,
+    showAccessAudit: Boolean,
+    onOpenAccessAudit: () -> Unit,
     onItemClick: (SearchResult) -> Unit,
     featureEnabled: (String) -> Boolean = { true }
 ) {
@@ -127,6 +129,10 @@ fun MainMenuScreen(
                     if (showSpecialUsersManagement) {
                         MenuCard("مدیریت کاربران", Icons.Filled.People, onOpenSpecialUsersManagement, accentColor = TaziehGreen)
                         Spacer(Modifier.height(10.dp))
+                        if (showAccessAudit) {
+                            MenuCard("سوابق تغییرات کاربران", Icons.Filled.History, onOpenAccessAudit, accentColor = TaziehGreen)
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
                 }
             }

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import android.content.Intent
 import com.example.bookapp.data.ViewerAccessTransfer
+import com.example.bookapp.data.AccessAuditLog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -132,9 +133,11 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
             onMessage = { message = it },
             onSaved = { updated ->
                 ViewerAccessPolicy.upsertSpecialUser(context, updated)
+                AccessAuditLog.record(context, "ذخیره/ویرایش کاربر", updated, "پرونده کاربر در Admin ذخیره شد.")
                 reload(); selected = null; message = "اطلاعات کاربر «${updated.displayName.ifBlank { updated.installationId }}» ذخیره شد."
             },
             onDeleted = {
+                AccessAuditLog.record(context, "حذف کاربر", user, "کاربر از فهرست کاربران خاص حذف شد.")
                 ViewerAccessPolicy.removeSpecialUser(context, user.installationId)
                 reload(); selected = null; message = "کاربر حذف شد."
             }
@@ -216,6 +219,7 @@ private fun SpecialUserEditorDialog(
                             setPackage("com.example.bookapp.viewer")
                         }
                         context.startActivity(intent)
+                        AccessAuditLog.record(context, "ارسال سیاست", user, "سیاست دسترسی برای Viewer ارسال شد.")
                     }.onFailure {
                         onMessage("ارسال سیاست به Viewer ناموفق بود: ${it.message ?: "خطای نامشخص"}")
                     }

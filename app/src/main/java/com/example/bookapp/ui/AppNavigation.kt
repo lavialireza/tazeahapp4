@@ -84,6 +84,7 @@ private const val ROUTE_MUHARRAM_CALENDAR = "muharram_calendar"
 private const val ROUTE_CONTENT_MANAGEMENT = "content_management"
 private const val ROUTE_VIEWER_ACCESS = "viewer_access"
 private const val ROUTE_SPECIAL_USERS = "special_users"
+private const val ROUTE_ACCESS_AUDIT = "access_audit"
 private const val ROUTE_CONTENT_EDITOR = "content_editor"
 private const val ROUTE_FIELDS = "fields"
 private const val ROUTE_TAZIEHS = "taziehs/{fieldId}/{fieldTitle}"
@@ -230,6 +231,8 @@ fun AppNavigation(
                 onOpenViewerAccessManagement = { if (!publicViewer) navController.navigate(ROUTE_VIEWER_ACCESS) },
                 showSpecialUsersManagement = !publicViewer,
                 onOpenSpecialUsersManagement = { if (!publicViewer) navController.navigate(ROUTE_SPECIAL_USERS) },
+                showAccessAudit = !publicViewer,
+                onOpenAccessAudit = { if (!publicViewer) navController.navigate(ROUTE_ACCESS_AUDIT) },
                 onItemClick = { result -> navController.navigate("text/${result.sectionId}") },
                 featureEnabled = ::featureEnabled
             )
@@ -522,6 +525,10 @@ fun AppNavigation(
 
         if (!publicViewer) composable(ROUTE_SPECIAL_USERS) {
             SpecialUsersManagementScreen(onBack = { navController.popBackStack() })
+        }
+
+        if (!publicViewer) composable(ROUTE_ACCESS_AUDIT) {
+            AccessAuditLogScreen(onBack = { navController.popBackStack() })
         }
 
         if (!publicViewer) composable(ROUTE_CONTENT_MANAGEMENT) {
