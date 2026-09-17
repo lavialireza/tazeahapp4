@@ -2,6 +2,7 @@ package com.example.bookapp.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -9,6 +10,10 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
+import android.content.Intent
+import com.example.bookapp.data.ViewerAccessTransfer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,9 +30,30 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
     var users by remember { mutableStateOf(ViewerAccessPolicy.getSpecialUsers(context)) }
     var selected by remember { mutableStateOf<ViewerAccessPolicy.SpecialUser?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf("all") }
+    var sortMode by remember { mutableStateOf("name") }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
 
     fun reload() { users = ViewerAccessPolicy.getSpecialUsers(context) }
+    fun statusOf(user: ViewerAccessPolicy.SpecialUser): String = when {
+        !user.enabled -> "disabled"
+        user.expiresAt != null && user.expiresAt > 0L && System.currentTimeMillis() > user.expiresAt -> "expired"
+        else -> "active"
+    }
+    val visibleUsers = remember(users, searchQuery, statusFilter, sortMode) {
+        val q = searchQuery.trim().lowercase(Locale.getDefault())
+        users.filter { user ->
+            val matchesQuery = q.isBlank() || listOf(user.displayName, user.phone, user.position, user.userType, user.installationId, user.details)
+                .any { it.lowercase(Locale.getDefault()).contains(q) }
+            val matchesStatus = statusFilter == "all" || statusOf(user) == statusFilter
+            matchesQuery && matchesStatus
+        }.sortedWith(when (sortMode) {
+            "created" -> compareByDescending<ViewerAccessPolicy.SpecialUser> { it.createdAt }
+            "expiry" -> compareBy<ViewerAccessPolicy.SpecialUser> { it.expiresAt ?: Long.MAX_VALUE }
+            else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.displayName.ifBlank { it.installationId } }
+        })
+    }
 
     Scaffold(
         topBar = {
@@ -41,12 +67,37 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(pad).padding(14.dp)) {
             Text("کاربران خاص", style = MaterialTheme.typography.headlineSmall)
             Text("برای مشاهده و ویرایش پرونده هر کاربر روی کارت او بزنید.", style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, null) },
+                label = { Text("جستجوی نام، همراه، سمت یا شناسه") }
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                listOf("all" to "همه", "active" to "فعال", "disabled" to "غیرفعال", "expired" to "منقضی").forEach { (v, label) ->
+                    FilterChip(selected = statusFilter == v, onClick = { statusFilter = v }, label = { Text(label) })
+                }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("مرتب‌سازی:", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
+                listOf("name" to "نام", "created" to "جدیدترین ثبت", "expiry" to "نزدیک‌ترین انقضا").forEach { (v, label) ->
+                    FilterChip(selected = sortMode == v, onClick = { sortMode = v }, label = { Text(label) })
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("نمایش ${visibleUsers.size} نفر از ${users.size} کاربر", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
             if (users.isEmpty()) {
                 Card(Modifier.fillMaxWidth()) { Text("هنوز کاربر خاصی ثبت نشده است.", Modifier.padding(18.dp)) }
+            } else if (visibleUsers.isEmpty()) {
+                Card(Modifier.fillMaxWidth()) { Text("کاربری با این جستجو یا فیلتر پیدا نشد.", Modifier.padding(18.dp)) }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                    items(users, key = { it.installationId }) { user ->
+                    items(visibleUsers, key = { it.installationId }) { user ->
                         val status = when {
                             !user.enabled -> "غیرفعال"
                             user.expiresAt != null && user.expiresAt > 0L && System.currentTimeMillis() > user.expiresAt -> "منقضی"
@@ -77,6 +128,7 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
         SpecialUserEditorDialog(
             user = user,
             onDismiss = { selected = null },
+            onMessage = { message = it },
             onSaved = { updated ->
                 ViewerAccessPolicy.upsertSpecialUser(context, updated)
                 reload(); selected = null; message = "اطلاعات کاربر «${updated.displayName.ifBlank { updated.installationId }}» ذخیره شد."
@@ -94,6 +146,7 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
 private fun SpecialUserEditorDialog(
     user: ViewerAccessPolicy.SpecialUser,
     onDismiss: () -> Unit,
+    onMessage: (String) -> Unit,
     onSaved: (ViewerAccessPolicy.SpecialUser) -> Unit,
     onDeleted: () -> Unit
 ) {
@@ -109,6 +162,7 @@ private fun SpecialUserEditorDialog(
     var profile by remember(user.installationId) { mutableStateOf(user.profile) }
     var permissions by remember(user.installationId) { mutableStateOf(user.permissions) }
     var error by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -150,11 +204,27 @@ private fun SpecialUserEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = {
+                    runCatching {
+                        val uri = ViewerAccessTransfer.createShareUri(context, user.installationId)
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "application/json"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            setPackage("com.example.bookapp.viewer")
+                        }
+                        context.startActivity(intent)
+                    }.onFailure {
+                        onMessage("ارسال سیاست به Viewer ناموفق بود: ${it.message ?: "خطای نامشخص"}")
+                    }
+                }) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(3.dp)); Text("ارسال سیاست") }
+                TextButton(onClick = {
                 val exp = if (expiry.isBlank()) null else runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(expiry)?.time }.getOrNull()
                 if (expiry.isNotBlank() && exp == null) { error = "تاریخ انقضا معتبر نیست."; return@TextButton }
                 onSaved(user.copy(displayName = name.trim(), details = details.trim(), phone = phone.trim(), address = address.trim(), position = position.trim(), userType = userType.trim(), otherDetails = other.trim(), expiresAt = exp, enabled = enabled, profile = profile, permissions = permissions))
             }) { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(4.dp)); Text("ذخیره") }
+            }
         },
         dismissButton = {
             Row {
