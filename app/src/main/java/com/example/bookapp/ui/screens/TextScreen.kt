@@ -681,6 +681,7 @@ private fun FootnotesSection(
     var editing by remember { mutableStateOf<FootnoteEntity?>(null) }
     var saving by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    val context = LocalContext.current
     val footnoteScope = rememberCoroutineScope()
 
     Row(
