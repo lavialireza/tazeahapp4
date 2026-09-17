@@ -530,7 +530,7 @@ fun TextScreen(
                     Prefs.setTag(context, sectionId, input)
                     tag = input.ifBlank { null }
                     showTagDialog = false
-                }) { Text(if (saving) "در حال ذخیره…" else "ذخیره") }
+                }) { Text("ذخیره") }
             },
             dismissButton = {
                 TextButton(onClick = { showTagDialog = false }) { Text("انصراف") }
@@ -599,7 +599,7 @@ private fun reportContentIssue(context: Context, title: String, content: String,
 @Composable
 private fun FootnotesSection(
     footnotes: List<FootnoteEntity>,
-    onAdd: (term: String, explanation: String) -> Unit,
+    onAdd: suspend (term: String, explanation: String) -> Result<Unit>,
     onEdit: (FootnoteEntity, term: String, explanation: String) -> Unit,
     onDelete: (FootnoteEntity) -> Unit,
     saveError: String? = null
