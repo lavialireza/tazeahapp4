@@ -49,6 +49,22 @@ object AccessAuditLog {
         }.getOrElse { emptyList() }
     }
 
+    fun describeChanges(oldUser: ViewerAccessPolicy.SpecialUser?, newUser: ViewerAccessPolicy.SpecialUser): String {
+        if (oldUser == null) return "کاربر جدید ایجاد شد."
+        val changes = mutableListOf<String>()
+        if (oldUser.enabled != newUser.enabled) changes += if (newUser.enabled) "کاربر فعال شد" else "کاربر غیرفعال شد"
+        if (oldUser.profile != newUser.profile) changes += "پروفایل از ${oldUser.profile} به ${newUser.profile} تغییر کرد"
+        if (oldUser.expiresAt != newUser.expiresAt) changes += "تاریخ انقضا تغییر کرد"
+        if (oldUser.displayName != newUser.displayName) changes += "نام کاربر تغییر کرد"
+        val labels = ViewerAccessPolicy.permissionLabels
+        labels.forEach { (key, label) ->
+            val before = oldUser.permissions[key] == true
+            val after = newUser.permissions[key] == true
+            if (before != after) changes += "$label ${if (after) "فعال شد" else "غیرفعال شد"}"
+        }
+        return if (changes.isEmpty()) "تغییر مؤثری در اطلاعات یا مجوزهای کاربر ثبت نشد." else changes.joinToString("؛ ")
+    }
+
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).commit()
     }

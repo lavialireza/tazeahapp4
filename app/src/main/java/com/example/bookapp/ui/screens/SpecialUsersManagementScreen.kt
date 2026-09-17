@@ -13,11 +13,16 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Dashboard
 import android.content.Intent
+import android.net.Uri
 import com.example.bookapp.data.ViewerAccessTransfer
 import com.example.bookapp.data.AccessAuditLog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.bookapp.data.ViewerAccessPolicy
@@ -36,6 +41,42 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
     var statusFilter by remember { mutableStateOf("all") }
     var sortMode by remember { mutableStateOf("name") }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US) }
+    var reportUser by remember { mutableStateOf<ViewerAccessPolicy.SpecialUser?>(null) }
+    var restoreConfirm by remember { mutableStateOf<String?>(null) }
+    var showDashboard by remember { mutableStateOf(false) }
+    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        if (uri != null) runCatching {
+            val root = org.json.JSONObject().put("schema", 1).put("type", "tazieh_special_users_backup")
+                .put("createdAt", System.currentTimeMillis())
+            val arr = org.json.JSONArray()
+            users.forEach { u ->
+                val o = org.json.JSONObject().put("installationId", u.installationId).put("profile", u.profile)
+                    .put("displayName", u.displayName).put("details", u.details).put("phone", u.phone)
+                    .put("address", u.address).put("position", u.position).put("userType", u.userType)
+                    .put("otherDetails", u.otherDetails).put("enabled", u.enabled).put("createdAt", u.createdAt)
+                    .put("updatedAt", u.updatedAt)
+                if (u.expiresAt == null) o.put("expiresAt", org.json.JSONObject.NULL) else o.put("expiresAt", u.expiresAt)
+                val pp = org.json.JSONObject(); ViewerAccessPolicy.permissionLabels.keys.forEach { k -> pp.put(k, u.permissions[k] == true) }
+                o.put("permissions", pp); arr.put(o)
+            }
+            root.put("users", arr)
+            context.contentResolver.openOutputStream(uri)?.use { it.write(root.toString(2).toByteArray(Charsets.UTF_8)) }
+                ?: error("فایل پشتیبان قابل نوشتن نیست.")
+            AccessAuditLog.record(context, "پشتیبان‌گیری کاربران", "BACKUP", "", "از ${users.size} کاربر خاص پشتیبان تهیه شد.")
+            message = "پشتیبان کاربران با موفقیت ذخیره شد."
+        }.onFailure { message = "پشتیبان‌گیری ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) runCatching {
+            val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: error("فایل خوانده نشد.")
+            val root = org.json.JSONObject(text)
+            require(root.optString("type") == "tazieh_special_users_backup") { "این فایل پشتیبان کاربران خاص نیست." }
+            val arr = root.getJSONArray("users")
+            restoreConfirm = text
+            message = "فایل پشتیبان ${arr.length()} کاربر دارد. برای تأیید بازیابی اقدام کنید."
+        }.onFailure { message = "بازیابی ناموفق بود: ${it.message ?: "فایل نامعتبر"}" }
+    }
 
     fun reload() { users = ViewerAccessPolicy.getSpecialUsers(context) }
     fun statusOf(user: ViewerAccessPolicy.SpecialUser): String = when {
@@ -70,6 +111,12 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
             Text("کاربران خاص", style = MaterialTheme.typography.headlineSmall)
             Text("برای مشاهده و ویرایش پرونده هر کاربر روی کارت او بزنید.", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { showDashboard = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Dashboard, null)
+                Spacer(Modifier.width(6.dp))
+                Text("داشبورد مدیریتی کاربران")
+            }
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -78,6 +125,14 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 label = { Text("جستجوی نام، همراه، سمت یا شناسه") }
             )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { backupLauncher.launch("Tazieh_Special_Users_Backup_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.json") }) {
+                    Icon(Icons.Filled.Save, null); Spacer(Modifier.width(4.dp)); Text("پشتیبان‌گیری")
+                }
+                OutlinedButton(onClick = { restoreLauncher.launch(arrayOf("application/json", "text/*")) }) {
+                    Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(4.dp)); Text("بازیابی")
+                }
+            }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 listOf("all" to "همه", "active" to "فعال", "disabled" to "غیرفعال", "expired" to "منقضی").forEach { (v, label) ->
@@ -117,6 +172,10 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                                 if (user.position.isNotBlank()) Text("سمت: ${user.position}", style = MaterialTheme.typography.bodySmall)
                                 Text("نوع کاربری: ${user.userType.ifBlank { user.profile }}", style = MaterialTheme.typography.bodySmall)
                                 Text("ثبت: ${dateFormat.format(Date(user.createdAt))}", style = MaterialTheme.typography.bodySmall)
+                                Spacer(Modifier.height(6.dp))
+                                TextButton(onClick = { reportUser = user }) {
+                                    Icon(Icons.Filled.Info, null); Spacer(Modifier.width(4.dp)); Text("گزارش کامل کاربر")
+                                }
                             }
                         }
                     }
@@ -132,8 +191,9 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
             onDismiss = { selected = null },
             onMessage = { message = it },
             onSaved = { updated ->
+                val old = ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId == updated.installationId }
                 ViewerAccessPolicy.upsertSpecialUser(context, updated)
-                AccessAuditLog.record(context, "ذخیره/ویرایش کاربر", updated, "پرونده کاربر در Admin ذخیره شد.")
+                AccessAuditLog.record(context, "ذخیره/ویرایش کاربر", updated, AccessAuditLog.describeChanges(old, updated))
                 reload(); selected = null; message = "اطلاعات کاربر «${updated.displayName.ifBlank { updated.installationId }}» ذخیره شد."
             },
             onDeleted = {
@@ -143,6 +203,71 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
             }
         )
     }
+
+    reportUser?.let { user ->
+        SpecialUserReportDialog(user, dateTimeFormat, onDismiss = { reportUser = null })
+    }
+    if (showDashboard) {
+        SpecialUsersDashboardDialog(users, onDismiss = { showDashboard = false })
+    }
+    restoreConfirm?.let { json ->
+        AlertDialog(
+            onDismissRequest = { restoreConfirm = null },
+            title = { Text("تأیید بازیابی کاربران") },
+            text = { Text("بازیابی، فهرست فعلی کاربران خاص را با نسخه موجود در فایل پشتیبان جایگزین می‌کند. ادامه می‌دهید؟") },
+            confirmButton = {
+                TextButton(onClick = {
+                    runCatching {
+                        val arr = org.json.JSONObject(json).getJSONArray("users")
+                        val restored = (0 until arr.length()).map { i ->
+                            val o = arr.getJSONObject(i)
+                            val pp = o.optJSONObject("permissions")
+                            ViewerAccessPolicy.SpecialUser(
+                                installationId = o.optString("installationId").trim().uppercase(Locale.US),
+                                profile = o.optString("profile", ViewerAccessPolicy.PROFILE_CUSTOM),
+                                expiresAt = if (o.isNull("expiresAt")) null else o.optLong("expiresAt"),
+                                permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { k -> pp?.optBoolean(k, false) ?: false },
+                                displayName = o.optString("displayName"), details = o.optString("details"), phone = o.optString("phone"),
+                                address = o.optString("address"), position = o.optString("position"), userType = o.optString("userType"),
+                                otherDetails = o.optString("otherDetails"), enabled = o.optBoolean("enabled", true),
+                                createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+                            )
+                        }.filter { it.installationId.isNotBlank() }
+                        ViewerAccessPolicy.saveSpecialUsers(context, restored)
+                        AccessAuditLog.record(context, "بازیابی کاربران", "RESTORE", "", "${restored.size} کاربر از پشتیبان بازیابی شد.")
+                        reload(); restoreConfirm = null; message = "${restored.size} کاربر با موفقیت بازیابی شد."
+                    }.onFailure { message = "بازیابی ناموفق بود: ${it.message ?: "خطای نامشخص"}"; restoreConfirm = null }
+                }) { Text("بازیابی و جایگزینی") }
+            },
+            dismissButton = { TextButton(onClick = { restoreConfirm = null }) { Text("انصراف") } }
+        )
+    }
+}
+
+@Composable
+private fun SpecialUserReportDialog(user: ViewerAccessPolicy.SpecialUser, dateFormat: SimpleDateFormat, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val history = remember(user.installationId, user.updatedAt) {
+        AccessAuditLog.getAll(context).filter { it.installationId == user.installationId.trim().uppercase(Locale.US) }.take(10)
+    }
+    val status = when { !user.enabled -> "غیرفعال"; user.expiresAt != null && user.expiresAt > 0L && System.currentTimeMillis() > user.expiresAt -> "منقضی"; else -> "فعال" }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("گزارش کامل کاربر") }, text = {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            item { Text("نام: ${user.displayName.ifBlank { "بدون نام" }}", style = MaterialTheme.typography.titleMedium) }
+            item { Text("شناسه نصب: ${user.installationId}") }
+            item { Text("وضعیت: $status") }
+            item { Text("نوع کاربری: ${user.userType.ifBlank { user.profile }}") }
+            item { Text("پروفایل دسترسی: ${user.profile}") }
+            item { Text("ثبت اولیه: ${dateFormat.format(Date(user.createdAt))}") }
+            item { Text("آخرین ویرایش: ${dateFormat.format(Date(user.updatedAt))}") }
+            item { Text("انقضا: ${user.expiresAt?.let { dateFormat.format(Date(it)) } ?: "بدون انقضا"}") }
+            item { Text("مجوزهای فعال: ${user.permissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}") }
+            items(ViewerAccessPolicy.permissionLabels.toList().filter { user.permissions[it.first] == true }) { Text("✓ ${it.second}") }
+            item { Text("سوابق مرتبط: ${history.size} مورد", style = MaterialTheme.typography.titleSmall) }
+            items(history) { h -> Text("${dateFormat.format(Date(h.timestamp))} — ${h.action}
+${h.details}", style = MaterialTheme.typography.bodySmall) }
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("بستن") } })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -239,3 +364,52 @@ private fun SpecialUserEditorDialog(
         }
     )
 }
+@Composable
+private fun SpecialUsersDashboardDialog(users: List<ViewerAccessPolicy.SpecialUser>, onDismiss: () -> Unit) {
+    val now = System.currentTimeMillis()
+    val active = users.count { it.enabled && !(it.expiresAt != null && it.expiresAt > 0L && now > it.expiresAt) }
+    val disabled = users.count { !it.enabled }
+    val expired = users.count { it.enabled && it.expiresAt != null && it.expiresAt > 0L && now > it.expiresAt }
+    val expiringSoon = users.filter {
+        it.enabled && it.expiresAt != null && it.expiresAt > now && it.expiresAt <= now + 30L * 24 * 60 * 60 * 1000
+    }.sortedBy { it.expiresAt }
+    val permissionStats = ViewerAccessPolicy.permissionLabels.map { (key, label) ->
+        label to users.count { it.enabled && it.permissions[key] == true }
+    }.sortedByDescending { it.second }
+    val df = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("داشبورد مدیریتی کاربران") },
+        text = {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                item {
+                    Text("خلاصه وضعیت", style = MaterialTheme.typography.titleMedium)
+                    Text("کل کاربران: ${users.size}")
+                    Text("فعال: $active   |   غیرفعال: $disabled   |   منقضی: $expired")
+                    Text("در معرض انقضا تا ۳۰ روز آینده: ${expiringSoon.size}")
+                }
+                item { Text("مجوزها بر اساس تعداد کاربران", style = MaterialTheme.typography.titleMedium) }
+                items(permissionStats) { (label, count) ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(label)
+                        Text(count.toString(), style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+                if (expiringSoon.isNotEmpty()) {
+                    item { Text("کاربران با انقضای نزدیک", style = MaterialTheme.typography.titleMedium) }
+                    items(expiringSoon) { user ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text(user.displayName.ifBlank { user.installationId }, style = MaterialTheme.typography.titleSmall)
+                                Text("انقضا: ${df.format(Date(user.expiresAt!!))}", style = MaterialTheme.typography.bodySmall)
+                                Text("مجوز فعال: ${user.permissions.count { it.value }}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("بستن") } }
+    )
+}
+
