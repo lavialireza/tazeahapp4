@@ -10,6 +10,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,6 +33,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
@@ -122,6 +126,7 @@ fun TextScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val scrollState = rememberScrollState()
+    val textScope = rememberCoroutineScope()
     LaunchedEffect(fontScale) { readerFontScale = fontScale }
     LaunchedEffect(darkMode) { readerDarkMode = darkMode }
     LaunchedEffect(fontChoice) { readerFontChoice = fontChoice }
@@ -348,15 +353,52 @@ fun TextScreen(
             val readerFontFamily = FontChoices[readerFontChoice] ?: FontChoices["titr"]!!
             val readerBaseFontSize = 18f * readerFontScale.coerceIn(0.8f, 2.0f)
             val readerLineHeight = readerBaseFontSize * lineSpacing
-            Text(
-                content,
-                color = if (readerDarkMode) Color(0xFFEFE0C0) else MaterialTheme.colorScheme.onSurface,
+            var selectedFootnote by remember(footnotes) { mutableStateOf<FootnoteEntity?>(null) }
+            val annotatedContent = remember(content, footnotes) {
+                buildAnnotatedString {
+                    append(content)
+                    footnotes.forEachIndexed { index, fn ->
+                        var start = 0
+                        while (start < length) {
+                            val found = content.indexOf(fn.term, start, ignoreCase = false)
+                            if (found < 0) break
+                            addStyle(SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), found, found + fn.term.length)
+                            addStringAnnotation("FOOTNOTE", index.toString(), found, found + fn.term.length)
+                            start = found + fn.term.length
+                        }
+                    }
+                }
+            }
+            ClickableText(
+                text = annotatedContent,
+                onClick = { offset ->
+                    annotatedContent.getStringAnnotations("FOOTNOTE", offset, offset).firstOrNull()?.let { ann ->
+                        selectedFootnote = footnotes.getOrNull(ann.item.toIntOrNull() ?: -1)
+                    }
+                },
                 style = MaterialTheme.typography.bodyLarge.copy(
+                    color = if (readerDarkMode) Color(0xFFEFE0C0) else MaterialTheme.colorScheme.onSurface,
                     fontFamily = readerFontFamily,
                     fontSize = readerBaseFontSize.sp,
                     lineHeight = readerLineHeight.sp
                 )
             )
+            if (selectedFootnote != null) {
+                val fn = selectedFootnote!!
+                AlertDialog(
+                    onDismissRequest = { selectedFootnote = null },
+                    title = { Text("پاورقی") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("واژه", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(fn.term, fontWeight = FontWeight.Bold)
+                            Text("توضیح", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                            Text(fn.explanation)
+                        }
+                    },
+                    confirmButton = { TextButton(onClick = { selectedFootnote = null }) { Text("بستن") } }
+                )
+            }
 
             if (hasPrevSection || hasNextSection) {
                 Spacer(Modifier.height(16.dp))
@@ -379,6 +421,18 @@ fun TextScreen(
                     onAdd = onAddFootnote,
                     onEdit = onEditFootnote,
                     onDelete = onDeleteFootnote,
+                    onAddToDictionary = { fn ->
+                        val added = com.example.bookapp.data.GlossaryStore.add(context, fn.term, fn.explanation)
+                        statusMessage = if (added) "«${fn.term}» به فرهنگ لغت اضافه شد." else "این واژه قبلاً در فرهنگ لغت وجود دارد."
+                        added
+                    },
+                    onJumpToText = { fn ->
+                        val idx = content.indexOf(fn.term)
+                        if (idx >= 0 && content.isNotBlank() && scrollState.maxValue > 0) {
+                            val ratio = idx.toFloat() / content.length.coerceAtLeast(1)
+                            textScope.launch { scrollState.animateScrollTo((scrollState.maxValue * ratio).toInt().coerceIn(0, scrollState.maxValue)) }
+                        }
+                    },
                     saveError = saveError
                 )
             }
@@ -605,11 +659,11 @@ private fun normalizeDictionaryTerm(value: String): String = value
     .replace('ة', 'ه')
     .replace(Regex("\\s+"), " ")
 
-private fun isAlreadyInDictionary(term: String): Boolean {
+private fun isAlreadyInDictionary(context: Context, term: String): Boolean {
     val normalized = normalizeDictionaryTerm(term)
-    return normalized.isNotEmpty() && GLOSSARY_TERMS.any {
+    return normalized.isNotEmpty() && (GLOSSARY_TERMS.any {
         normalizeDictionaryTerm(it.term) == normalized
-    }
+    } || com.example.bookapp.data.GlossaryStore.contains(context, normalized))
 }
 
 @Composable
@@ -618,6 +672,8 @@ private fun FootnotesSection(
     onAdd: suspend (term: String, explanation: String) -> Result<Unit>,
     onEdit: (FootnoteEntity, term: String, explanation: String) -> Unit,
     onDelete: (FootnoteEntity) -> Unit,
+    onAddToDictionary: (FootnoteEntity) -> Boolean = { false },
+    onJumpToText: (FootnoteEntity) -> Unit = {},
     saveError: String? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
@@ -712,8 +768,18 @@ private fun FootnotesSection(
                     IconButton(onClick = { editing = fn; showDialog = true }) {
                         Icon(Icons.Filled.Label, contentDescription = "ویرایش پاورقی")
                     }
-                    IconButton(onClick = { onDelete(fn) }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "حذف پاورقی")
+                    Column {
+                        IconButton(onClick = { onJumpToText(fn) }) {
+                            Icon(Icons.Filled.Search, contentDescription = "رفتن به واژه در متن")
+                        }
+                        IconButton(onClick = {
+                            onAddToDictionary(fn)
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "افزودن به فرهنگ لغت")
+                        }
+                        IconButton(onClick = { onDelete(fn) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "حذف پاورقی")
+                        }
                     }
                 }
             }
@@ -763,7 +829,7 @@ private fun FootnotesSection(
                     } else {
                         val cleanTerm = normalizeDictionaryTerm(term)
                         val current = editing
-                        if (current == null && isAlreadyInDictionary(cleanTerm)) {
+                        if (current == null && isAlreadyInDictionary(LocalContext.current, cleanTerm)) {
                             validationError = "این واژه قبلاً در دیکشنری وجود دارد و دوباره ثبت نمی‌شود."
                         } else if (current == null) {
                             if (saving) return@TextButton

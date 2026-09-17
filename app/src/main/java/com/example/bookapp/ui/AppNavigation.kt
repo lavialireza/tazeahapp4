@@ -1382,6 +1382,13 @@ fun AppNavigation(
                             val cleanExplanation = explanation.trim()
                             require(cleanTerm.isNotEmpty()) { "واژه یا عبارت خالی است" }
                             require(cleanExplanation.isNotEmpty()) { "توضیح پاورقی خالی است" }
+                            val normalizeFootnoteTerm: (String) -> String = { value ->
+                                value.trim().replace('ي', 'ی').replace('ك', 'ک').replace('ۀ', 'ه').replace('ة', 'ه').replace(Regex("\\s+"), " ")
+                            }
+                            val duplicate = db.footnoteDao().getBySection(section.id).any {
+                                normalizeFootnoteTerm(it.term) == normalizeFootnoteTerm(cleanTerm)
+                            }
+                            require(!duplicate) { "این واژه قبلاً در پاورقی همین بخش ثبت شده است." }
                             val uid = com.example.bookapp.data.ContentUid.new()
                             val insertedId = db.footnoteDao().insert(
                                 com.example.bookapp.data.FootnoteEntity(
@@ -1406,7 +1413,14 @@ fun AppNavigation(
                 onEditFootnote = { fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
                     footnoteError = null
                     runCatching {
-                        db.footnoteDao().update(fn.copy(term = term.trim(), explanation = explanation.trim()))
+                        val cleanTerm = term.trim()
+                        val cleanExplanation = explanation.trim()
+                        require(cleanTerm.isNotEmpty()) { "واژه یا عبارت خالی است" }
+                        require(cleanExplanation.isNotEmpty()) { "توضیح پاورقی خالی است" }
+                        val norm: (String) -> String = { value -> value.trim().replace('ي', 'ی').replace('ك', 'ک').replace('ۀ', 'ه').replace('ة', 'ه').replace(Regex("\\s+"), " ") }
+                        val duplicate = db.footnoteDao().getBySection(sectionId).any { it.id != fn.id && norm(it.term) == norm(cleanTerm) }
+                        require(!duplicate) { "این واژه قبلاً در پاورقی همین بخش ثبت شده است." }
+                        db.footnoteDao().update(fn.copy(term = cleanTerm, explanation = cleanExplanation))
                         reloadFootnotes()
                     }.onFailure { footnoteError = "ویرایش پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
                 } },

@@ -12,6 +12,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import com.example.bookapp.data.GlossaryStore
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,10 +45,15 @@ val GLOSSARY_TERMS = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlossaryScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
     var query by remember { mutableStateOf("") }
-    val filtered = remember(query) {
-        if (query.isBlank()) GLOSSARY_TERMS
-        else GLOSSARY_TERMS.filter { it.term.contains(query, ignoreCase = true) || it.explanation.contains(query, ignoreCase = true) }
+    var customTerms by remember { mutableStateOf(GlossaryStore.get(context)) }
+    val allTerms = remember(customTerms) {
+        GLOSSARY_TERMS + customTerms.map { GlossaryTerm(it.first, it.second) }
+    }
+    val filtered = remember(query, allTerms) {
+        if (query.isBlank()) allTerms
+        else allTerms.filter { it.term.contains(query, ignoreCase = true) || it.explanation.contains(query, ignoreCase = true) }
     }
 
     Scaffold(
