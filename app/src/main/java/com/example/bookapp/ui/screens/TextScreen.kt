@@ -637,10 +637,29 @@ private fun FootnotesSection(
                     modifier = Modifier.padding(12.dp),
                     verticalAlignment = androidx.compose.ui.Alignment.Top
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(fn.term, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(2.dp))
-                        Text(fn.explanation, style = MaterialTheme.typography.bodySmall)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            tonalElevation = 2.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                                Text("واژه", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(2.dp))
+                                Text(fn.term, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            tonalElevation = 1.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                                Text("توضیح", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                                Spacer(Modifier.height(2.dp))
+                                Text(fn.explanation, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                     }
                     IconButton(onClick = { editing = fn; showDialog = true }) {
                         Icon(Icons.Filled.Label, contentDescription = "ویرایش پاورقی")
