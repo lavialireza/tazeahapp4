@@ -35,7 +35,12 @@ object ViewerAccessPolicy {
         val installationId: String,
         val profile: String,
         val expiresAt: Long?,
-        val permissions: Map<String, Boolean>
+        val permissions: Map<String, Boolean>,
+        val displayName: String = "",
+        val details: String = "",
+        val enabled: Boolean = true,
+        val createdAt: Long = System.currentTimeMillis(),
+        val updatedAt: Long = System.currentTimeMillis()
     )
 
     private const val PREFS = "viewer_access_policy"
@@ -61,7 +66,7 @@ object ViewerAccessPolicy {
     fun getEffectivePermissions(context: Context): Map<String, Boolean> {
         val id = installationId(context)
         val special = getSpecialUsers(context).firstOrNull { it.installationId == id }
-        if (special != null) {
+        if (special != null && special.enabled) {
             val expiry = special.expiresAt
             if (expiry == null || expiry <= 0L || System.currentTimeMillis() <= expiry) return special.permissions
         }
@@ -84,7 +89,8 @@ object ViewerAccessPolicy {
         permissions: Map<String, Boolean>,
         expiresAt: Long?,
         version: Int,
-        profile: String = PROFILE_CUSTOM
+        profile: String = PROFILE_CUSTOM,
+        enabled: Boolean = true
     ) {
         val id = installationId(context)
         // پروفایل صادرشده از Admin نیز همراه سیاست منتقل می‌شود تا Viewer
@@ -93,7 +99,7 @@ object ViewerAccessPolicy {
             PROFILE_PUBLIC, PROFILE_TRAINING, PROFILE_COLLABORATOR, PROFILE_CUSTOM -> profile
             else -> PROFILE_CUSTOM
         }
-        upsertSpecialUser(context, SpecialUser(id, normalizedProfile, expiresAt, permissions))
+        upsertSpecialUser(context, SpecialUser(id, normalizedProfile, expiresAt, permissions, enabled = enabled))
         check(getSpecialUsers(context).firstOrNull { it.installationId == id }?.profile == normalizedProfile) {
             "پروفایل کاربر خاص پس از اعمال سیاست قابل بازیابی نیست."
         }
@@ -138,8 +144,17 @@ object ViewerAccessPolicy {
                 if (id.isBlank()) return@mapNotNull null
                 val p = o.optJSONObject("permissions")
                 val perms = permissionLabels.keys.associateWith { p?.optBoolean(it, false) ?: false }
-                SpecialUser(id, o.optString("profile", PROFILE_CUSTOM),
-                    if (o.isNull("expiresAt")) null else o.optLong("expiresAt"), perms)
+                SpecialUser(
+                    installationId = id,
+                    profile = o.optString("profile", PROFILE_CUSTOM),
+                    expiresAt = if (o.isNull("expiresAt")) null else o.optLong("expiresAt"),
+                    permissions = perms,
+                    displayName = o.optString("displayName", ""),
+                    details = o.optString("details", ""),
+                    enabled = o.optBoolean("enabled", true),
+                    createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+                    updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+                )
             }
         }.getOrElse { emptyList() }
     }
@@ -147,7 +162,14 @@ object ViewerAccessPolicy {
     fun saveSpecialUsers(context: Context, users: List<SpecialUser>) {
         val arr = JSONArray()
         users.forEach { user ->
-            val o = JSONObject().put("installationId", user.installationId).put("profile", user.profile)
+            val o = JSONObject()
+                .put("installationId", user.installationId)
+                .put("profile", user.profile)
+                .put("displayName", user.displayName)
+                .put("details", user.details)
+                .put("enabled", user.enabled)
+                .put("createdAt", user.createdAt)
+                .put("updatedAt", user.updatedAt)
             if (user.expiresAt == null) o.put("expiresAt", JSONObject.NULL) else o.put("expiresAt", user.expiresAt)
             val p = JSONObject(); permissionLabels.keys.forEach { p.put(it, user.permissions[it] == true) }
             o.put("permissions", p); arr.put(o)
@@ -176,7 +198,13 @@ object ViewerAccessPolicy {
     fun upsertSpecialUser(context: Context, user: SpecialUser) {
         val normalizedId = user.installationId.trim().uppercase(java.util.Locale.US)
         require(normalizedId.isNotBlank()) { "شناسه نصب خالی است." }
-        val normalized = user.copy(installationId = normalizedId)
+        val existing = getSpecialUsers(context).firstOrNull { it.installationId.trim().equals(normalizedId, ignoreCase = true) }
+        val now = System.currentTimeMillis()
+        val normalized = user.copy(
+            installationId = normalizedId,
+            createdAt = existing?.createdAt ?: user.createdAt.takeIf { it > 0L } ?: now,
+            updatedAt = now
+        )
         val users = getSpecialUsers(context).toMutableList()
         val index = users.indexOfFirst { it.installationId.trim().equals(normalizedId, ignoreCase = true) }
         if (index >= 0) users[index] = normalized else users.add(normalized)

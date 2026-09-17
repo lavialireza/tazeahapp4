@@ -37,6 +37,7 @@ object ViewerAccessTransfer {
             .put("issuedAt", System.currentTimeMillis())
             .put("expiresAt", if (target == TARGET_PUBLIC) JSONObject.NULL else specialUser?.expiresAt ?: JSONObject.NULL)
             .put("profile", if (target == TARGET_PUBLIC) ViewerAccessPolicy.PROFILE_PUBLIC else specialUser?.profile ?: ViewerAccessPolicy.PROFILE_CUSTOM)
+        .put("enabled", if (target == TARGET_PUBLIC) true else specialUser?.enabled ?: false)
         val p = JSONObject(); ViewerAccessPolicy.permissionLabels.keys.forEach { p.put(it, permissions[it] == true) }
         root.put("permissions", p)
         val unsigned = root.toString()
@@ -69,11 +70,12 @@ object ViewerAccessTransfer {
         val p = payload.getJSONObject("permissions")
         val permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { p.optBoolean(it, false) }
         val version = payload.optInt("policyVersion", 1)
+        val enabled = payload.optBoolean("enabled", true)
         if (target == TARGET_PUBLIC) {
             ViewerAccessPolicy.setImportedPublicPermissions(context, permissions, version)
         } else {
             val profile = payload.optString("profile", ViewerAccessPolicy.PROFILE_CUSTOM)
-            ViewerAccessPolicy.setImportedSpecialPermissions(context, permissions, expiresAt, version, profile)
+            ViewerAccessPolicy.setImportedSpecialPermissions(context, permissions, expiresAt, version, profile, enabled)
         }
         "سیاست دسترسی با موفقیت اعمال شد."
     }

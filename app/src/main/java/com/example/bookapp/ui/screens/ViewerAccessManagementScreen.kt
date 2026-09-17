@@ -3,6 +3,7 @@ package com.example.bookapp.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
@@ -34,6 +35,9 @@ fun ViewerAccessManagementScreen(
     var specialUsers by remember { mutableStateOf(ViewerAccessPolicy.getSpecialUsers(context)) }
     var selectedUser by remember { mutableStateOf<ViewerAccessPolicy.SpecialUser?>(null) }
     var installationId by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
+    var details by remember { mutableStateOf("") }
+    var enabled by remember { mutableStateOf(true) }
     var profile by remember { mutableStateOf(ViewerAccessPolicy.PROFILE_CUSTOM) }
     var expiryText by remember { mutableStateOf("") }
     var customPermissions by remember { mutableStateOf(ViewerAccessPolicy.profileDefaults(profile)) }
@@ -72,12 +76,17 @@ fun ViewerAccessManagementScreen(
     }
 
     fun loadUser(user: ViewerAccessPolicy.SpecialUser) {
-        selectedUser = user; installationId = user.installationId; profile = user.profile
+        selectedUser = user
+        installationId = user.installationId
+        displayName = user.displayName
+        details = user.details
+        enabled = user.enabled
+        profile = user.profile
         expiryText = user.expiresAt?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it)) } ?: ""
         customPermissions = user.permissions
     }
     fun resetEditor() {
-        selectedUser = null; installationId = ""; profile = ViewerAccessPolicy.PROFILE_CUSTOM; expiryText = ""; customPermissions = ViewerAccessPolicy.profileDefaults(ViewerAccessPolicy.PROFILE_CUSTOM)
+        selectedUser = null; installationId = ""; displayName = ""; details = ""; enabled = true; profile = ViewerAccessPolicy.PROFILE_CUSTOM; expiryText = ""; customPermissions = ViewerAccessPolicy.profileDefaults(ViewerAccessPolicy.PROFILE_CUSTOM)
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("مدیریت دسترسی Viewer") }, navigationIcon = { TextButton(onClick = onBack) { Text("بازگشت") } }) }) { pad ->
@@ -103,8 +112,17 @@ fun ViewerAccessManagementScreen(
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp)) {
-                        Text("کاربر خاص / همکار", style = MaterialTheme.typography.titleMedium)
-                        Text("شناسه نصب Viewer را وارد کنید؛ این شناسه شماره تلفن یا IMEI نیست.", style = MaterialTheme.typography.bodySmall)
+                        Text(if (selectedUser == null) "افزودن کاربر خاص" else "ویرایش کاربر خاص", style = MaterialTheme.typography.titleMedium)
+                        Text("برای هر Viewer یک پرونده مدیریتی مستقل نگه‌داری می‌شود. شناسه نصب شماره تلفن یا IMEI نیست.", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(displayName, { displayName = it }, label = { Text("نام کاربر") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(details, { details = it }, label = { Text("مشخصات / توضیحات کاربر") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f)) {
+                                Text(if (enabled) "وضعیت: فعال" else "وضعیت: غیرفعال", style = MaterialTheme.typography.bodyMedium)
+                                Text(if (enabled) "دسترسی اختصاصی این کاربر قابل اعمال است." else "دسترسی اختصاصی این کاربر فعلاً اعمال نمی‌شود.", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = enabled, onCheckedChange = { enabled = it })
+                        }
                         OutlinedTextField(installationId, { installationId = it.uppercase(Locale.US) }, label = { Text("شناسه نصب") }, modifier = Modifier.fillMaxWidth())
                         Spacer(Modifier.height(6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -126,7 +144,18 @@ fun ViewerAccessManagementScreen(
                                 val expiry = expiryText.trim().takeIf { it.isNotBlank() }?.let { raw -> runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(raw)?.time }.getOrNull() }
                                 if (expiryText.isNotBlank() && expiry == null) { message = "تاریخ انقضا معتبر نیست."; return@Button }
                                 runCatching {
-                                    ViewerAccessPolicy.upsertSpecialUser(context, ViewerAccessPolicy.SpecialUser(normalizedId, profile, expiry, customPermissions))
+                                    ViewerAccessPolicy.upsertSpecialUser(
+                                        context,
+                                        ViewerAccessPolicy.SpecialUser(
+                                            installationId = normalizedId,
+                                            profile = profile,
+                                            expiresAt = expiry,
+                                            permissions = customPermissions,
+                                            displayName = displayName.trim(),
+                                            details = details.trim(),
+                                            enabled = enabled
+                                        )
+                                    )
                                     val reloaded = ViewerAccessPolicy.getSpecialUsers(context)
                                     check(reloaded.any { it.installationId.equals(normalizedId, ignoreCase = true) }) { "شناسه پس از ذخیره پیدا نشد." }
                                     specialUsers = reloaded
@@ -152,8 +181,9 @@ fun ViewerAccessManagementScreen(
                                     } else {
                                         val expired = match.expiresAt != null && match.expiresAt > 0L && System.currentTimeMillis() > match.expiresAt
                                         val active = match.permissions.count { it.value }
-                                        if (expired) "نتیجه آزمون: شناسه «$id» پیدا شد، اما دسترسی آن منقضی شده است."
-                                        else "نتیجه آزمون: شناسه «$id» پیدا شد و فعال است؛ $active قابلیت فعال دارد."
+                                        if (!match.enabled) "نتیجه آزمون: «${match.displayName.ifBlank { id }}» غیرفعال است."
+                                        else if (expired) "نتیجه آزمون: «${match.displayName.ifBlank { id }}» پیدا شد، اما دسترسی آن منقضی شده است."
+                                        else "نتیجه آزمون: «${match.displayName.ifBlank { id }}» فعال است؛ $active قابلیت فعال دارد."
                                     }
                                 }, Modifier.weight(1f)) { Text("آزمون دسترسی") }
                                 OutlinedButton(onClick = {
@@ -185,11 +215,15 @@ fun ViewerAccessManagementScreen(
                 }
             }
             items(specialUsers, key = { it.installationId }) { user ->
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth().clickable { loadUser(user) }) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(Modifier.weight(1f)) {
-                            Text(user.installationId); Text("پروفایل: ${profileTitle(user.profile)}", style = MaterialTheme.typography.bodySmall)
+                            Text(user.displayName.ifBlank { "بدون نام" }, style = MaterialTheme.typography.titleSmall)
+                            Text("شناسه: ${user.installationId}", style = MaterialTheme.typography.bodySmall)
+                            Text("پروفایل: ${profileTitle(user.profile)} | ${if (user.enabled) "فعال" else "غیرفعال"}", style = MaterialTheme.typography.bodySmall)
                             Text("انقضا: ${user.expiresAt?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it)) } ?: "بدون انقضا"}", style = MaterialTheme.typography.bodySmall)
+                            if (user.details.isNotBlank()) Text(user.details, style = MaterialTheme.typography.bodySmall)
+                            Text("مجوزهای فعال: ${user.permissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}", style = MaterialTheme.typography.bodySmall)
                         }
                         TextButton(onClick = { loadUser(user) }) { Text("ویرایش") }
                         IconButton(onClick = { ViewerAccessPolicy.removeSpecialUser(context, user.installationId); specialUsers = ViewerAccessPolicy.getSpecialUsers(context) }) { Icon(Icons.Filled.Delete, null) }
