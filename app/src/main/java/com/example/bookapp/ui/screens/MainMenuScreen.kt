@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.School
@@ -51,6 +52,8 @@ fun MainMenuScreen(
     onOpenContentManagement: () -> Unit,
     showViewerAccessManagement: Boolean,
     onOpenViewerAccessManagement: () -> Unit,
+    showSpecialUsersManagement: Boolean,
+    onOpenSpecialUsersManagement: () -> Unit,
     onItemClick: (SearchResult) -> Unit,
     featureEnabled: (String) -> Boolean = { true }
 ) {
@@ -121,6 +124,10 @@ fun MainMenuScreen(
                 if (showViewerAccessManagement) {
                     MenuCard("مدیریت دسترسی Viewer", Icons.Filled.Storage, onOpenViewerAccessManagement, accentColor = TaziehGreen)
                     Spacer(Modifier.height(10.dp))
+                    if (showSpecialUsersManagement) {
+                        MenuCard("مدیریت کاربران", Icons.Filled.People, onOpenSpecialUsersManagement, accentColor = TaziehGreen)
+                        Spacer(Modifier.height(10.dp))
+                    }
                 }
             }
             MenuCard("ورژن برنامه", null, onOpenVersion)

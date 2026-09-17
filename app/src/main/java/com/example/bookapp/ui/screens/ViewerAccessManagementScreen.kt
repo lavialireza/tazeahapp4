@@ -153,7 +153,13 @@ fun ViewerAccessManagementScreen(
                                             permissions = customPermissions,
                                             displayName = displayName.trim(),
                                             details = details.trim(),
-                                            enabled = enabled
+                                            phone = selectedUser?.phone ?: "",
+                                            address = selectedUser?.address ?: "",
+                                            position = selectedUser?.position ?: "",
+                                            userType = selectedUser?.userType ?: "",
+                                            otherDetails = selectedUser?.otherDetails ?: "",
+                                            enabled = enabled,
+                                            createdAt = selectedUser?.createdAt ?: System.currentTimeMillis()
                                         )
                                     )
                                     val reloaded = ViewerAccessPolicy.getSpecialUsers(context)

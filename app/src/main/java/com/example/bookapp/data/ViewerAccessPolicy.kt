@@ -38,6 +38,11 @@ object ViewerAccessPolicy {
         val permissions: Map<String, Boolean>,
         val displayName: String = "",
         val details: String = "",
+        val phone: String = "",
+        val address: String = "",
+        val position: String = "",
+        val userType: String = "",
+        val otherDetails: String = "",
         val enabled: Boolean = true,
         val createdAt: Long = System.currentTimeMillis(),
         val updatedAt: Long = System.currentTimeMillis()
@@ -151,6 +156,11 @@ object ViewerAccessPolicy {
                     permissions = perms,
                     displayName = o.optString("displayName", ""),
                     details = o.optString("details", ""),
+                    phone = o.optString("phone", ""),
+                    address = o.optString("address", ""),
+                    position = o.optString("position", ""),
+                    userType = o.optString("userType", ""),
+                    otherDetails = o.optString("otherDetails", ""),
                     enabled = o.optBoolean("enabled", true),
                     createdAt = o.optLong("createdAt", System.currentTimeMillis()),
                     updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
@@ -167,6 +177,11 @@ object ViewerAccessPolicy {
                 .put("profile", user.profile)
                 .put("displayName", user.displayName)
                 .put("details", user.details)
+                .put("phone", user.phone)
+                .put("address", user.address)
+                .put("position", user.position)
+                .put("userType", user.userType)
+                .put("otherDetails", user.otherDetails)
                 .put("enabled", user.enabled)
                 .put("createdAt", user.createdAt)
                 .put("updatedAt", user.updatedAt)
