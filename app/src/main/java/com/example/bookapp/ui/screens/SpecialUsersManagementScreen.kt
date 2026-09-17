@@ -196,6 +196,12 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                 AccessAuditLog.record(context, "ذخیره/ویرایش کاربر", updated, AccessAuditLog.describeChanges(old, updated))
                 reload(); selected = null; message = "اطلاعات کاربر «${updated.displayName.ifBlank { updated.installationId }}» ذخیره شد."
             },
+            onRestored = { restored ->
+                val old = ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId == restored.installationId }
+                ViewerAccessPolicy.upsertSpecialUser(context, restored)
+                AccessAuditLog.record(context, "بازیابی سیاست کاربر", restored, "یک نسخه قبلی سیاست کاربر از سوابق بازیابی شد.")
+                reload(); selected = null; message = "نسخه قبلی سیاست کاربر بازیابی شد؛ برای اعمال روی Viewer، دوباره «ارسال سیاست» را بزنید."
+            },
             onDeleted = {
                 AccessAuditLog.record(context, "حذف کاربر", user, "کاربر از فهرست کاربران خاص حذف شد.")
                 ViewerAccessPolicy.removeSpecialUser(context, user.installationId)
@@ -276,6 +282,7 @@ private fun SpecialUserEditorDialog(
     onDismiss: () -> Unit,
     onMessage: (String) -> Unit,
     onSaved: (ViewerAccessPolicy.SpecialUser) -> Unit,
+    onRestored: (ViewerAccessPolicy.SpecialUser) -> Unit,
     onDeleted: () -> Unit
 ) {
     var name by remember(user.installationId) { mutableStateOf(user.displayName) }
@@ -290,6 +297,7 @@ private fun SpecialUserEditorDialog(
     var profile by remember(user.installationId) { mutableStateOf(user.profile) }
     var permissions by remember(user.installationId) { mutableStateOf(user.permissions) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showHistory by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     AlertDialog(
@@ -348,6 +356,9 @@ private fun SpecialUserEditorDialog(
                         onMessage("ارسال سیاست به Viewer ناموفق بود: ${it.message ?: "خطای نامشخص"}")
                     }
                 }) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(3.dp)); Text("ارسال سیاست") }
+                TextButton(onClick = { showHistory = true }) {
+                    Text("سوابق سیاست")
+                }
                 TextButton(onClick = {
                 val exp = if (expiry.isBlank()) null else runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(expiry)?.time }.getOrNull()
                 if (expiry.isNotBlank() && exp == null) { error = "تاریخ انقضا معتبر نیست."; return@TextButton }
@@ -362,7 +373,58 @@ private fun SpecialUserEditorDialog(
             }
         }
     )
+    if (showHistory) {
+        SpecialUserHistoryDialog(
+            user = user,
+            onDismiss = { showHistory = false },
+            onRestore = { restored ->
+                runCatching {
+                    onRestored(restored)
+                    showHistory = false
+                }.onFailure { onMessage("بازیابی سیاست ناموفق بود: ${it.message ?: "خطای نامشخص"}") }
+            }
+        )
+    }
 }
+
+@Composable
+private fun SpecialUserHistoryDialog(
+    user: ViewerAccessPolicy.SpecialUser,
+    onDismiss: () -> Unit,
+    onRestore: (ViewerAccessPolicy.SpecialUser) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val history = remember(user.installationId, user.updatedAt) {
+        ViewerAccessPolicy.getSpecialUserHistory(context, user.installationId)
+    }
+    val df = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("سوابق سیاست دسترسی") },
+        text = {
+            if (history.isEmpty()) {
+                Text("برای این کاربر هنوز نسخه قبلی ثبت نشده است.")
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    items(history) { h ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(df.format(Date(h.capturedAt)), style = MaterialTheme.typography.titleSmall)
+                                Text("پروفایل: ${h.user.profile}")
+                                Text("وضعیت: ${if (h.user.enabled) "فعال" else "غیرفعال"}")
+                                Text("انقضا: ${h.user.expiresAt?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it)) } ?: "بدون انقضا"}")
+                                Text("مجوزهای فعال: ${h.user.permissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}")
+                                TextButton(onClick = { onRestore(h.user) }) { Text("بازگردانی این نسخه") }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("بستن") } }
+    )
+}
+
 @Composable
 private fun SpecialUsersDashboardDialog(users: List<ViewerAccessPolicy.SpecialUser>, onDismiss: () -> Unit) {
     val now = System.currentTimeMillis()

@@ -5,6 +5,7 @@ import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.SecureRandom
+import java.util.Locale
 
 /** مدیریت سیاست دسترسی Viewer؛ بدون وابستگی به شبکه. */
 object ViewerAccessPolicy {
@@ -56,6 +57,8 @@ object ViewerAccessPolicy {
     private const val KEY_IMPORTED_PUBLIC_VERSION = "imported_public_version"
     private const val KEY_IMPORTED_PUBLIC = "imported_public_permissions"
     private const val SPECIAL_USERS_FILE = "viewer_access_special_users.json"
+    private const val SPECIAL_USER_HISTORY_FILE = "viewer_access_special_users_history.json"
+    private const val MAX_HISTORY_PER_USER = 20
 
     fun defaultPermissions(): Map<String, Boolean> = permissionLabels.keys.associateWith { key ->
         key !in setOf("copy", "share", "pdf", "appIntro")
@@ -236,6 +239,74 @@ object ViewerAccessPolicy {
         check(file.exists() && file.readText(Charsets.UTF_8) == json) { "تأیید ذخیره کاربران خاص انجام نشد." }
     }
 
+    /** آخرین نسخه‌های قبلی پرونده کاربر خاص؛ فقط در Admin نگهداری می‌شود. */
+    data class SpecialUserHistory(val capturedAt: Long, val user: SpecialUser)
+
+    private fun historyFile(context: Context) = File(context.filesDir, SPECIAL_USER_HISTORY_FILE)
+
+    private fun historyObject(user: SpecialUser, capturedAt: Long): JSONObject = JSONObject()
+        .put("capturedAt", capturedAt)
+        .put("user", specialUserToJson(user))
+
+    private fun specialUserToJson(user: SpecialUser): JSONObject {
+        val o = JSONObject()
+            .put("installationId", user.installationId)
+            .put("profile", user.profile)
+            .put("displayName", user.displayName)
+            .put("details", user.details)
+            .put("phone", user.phone)
+            .put("address", user.address)
+            .put("position", user.position)
+            .put("userType", user.userType)
+            .put("otherDetails", user.otherDetails)
+            .put("enabled", user.enabled)
+            .put("createdAt", user.createdAt)
+            .put("updatedAt", user.updatedAt)
+        if (user.expiresAt == null) o.put("expiresAt", JSONObject.NULL) else o.put("expiresAt", user.expiresAt)
+        val p = JSONObject(); permissionLabels.keys.forEach { p.put(it, user.permissions[it] == true) }; o.put("permissions", p)
+        return o
+    }
+
+    private fun jsonToSpecialUser(o: JSONObject): SpecialUser {
+        val pp = o.optJSONObject("permissions")
+        return SpecialUser(
+            installationId = o.optString("installationId").trim().uppercase(Locale.US),
+            profile = o.optString("profile", PROFILE_CUSTOM),
+            expiresAt = if (o.isNull("expiresAt")) null else o.optLong("expiresAt"),
+            permissions = permissionLabels.keys.associateWith { k -> pp?.optBoolean(k, false) ?: false },
+            displayName = o.optString("displayName"), details = o.optString("details"), phone = o.optString("phone"),
+            address = o.optString("address"), position = o.optString("position"), userType = o.optString("userType"),
+            otherDetails = o.optString("otherDetails"), enabled = o.optBoolean("enabled", true),
+            createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+        )
+    }
+
+    private fun recordSpecialUserHistory(context: Context, user: SpecialUser) {
+        val file = historyFile(context)
+        val root = runCatching { if (file.exists()) JSONObject(file.readText(Charsets.UTF_8)) else JSONObject() }.getOrElse { JSONObject() }
+        val key = user.installationId.trim().uppercase(Locale.US)
+        val arr = runCatching { root.optJSONArray(key) ?: JSONArray() }.getOrElse { JSONArray() }
+        val rebuilt = JSONArray()
+        rebuilt.put(historyObject(user, System.currentTimeMillis()))
+        for (i in 0 until minOf(arr.length(), MAX_HISTORY_PER_USER - 1)) rebuilt.put(arr.getJSONObject(i))
+        root.put(key, rebuilt)
+        file.writeText(root.toString(), Charsets.UTF_8)
+    }
+
+    fun getSpecialUserHistory(context: Context, installationId: String): List<SpecialUserHistory> {
+        val key = installationId.trim().uppercase(Locale.US)
+        val file = historyFile(context)
+        if (!file.exists()) return emptyList()
+        return runCatching {
+            val arr = JSONObject(file.readText(Charsets.UTF_8)).optJSONArray(key) ?: JSONArray()
+            (0 until arr.length()).mapNotNull { i ->
+                val h = arr.optJSONObject(i) ?: return@mapNotNull null
+                val u = h.optJSONObject("user") ?: return@mapNotNull null
+                SpecialUserHistory(h.optLong("capturedAt", 0L), jsonToSpecialUser(u))
+            }
+        }.getOrElse { emptyList() }
+    }
+
     fun upsertSpecialUser(context: Context, user: SpecialUser) {
         val normalizedId = user.installationId.trim().uppercase(java.util.Locale.US)
         require(normalizedId.isNotBlank()) { "شناسه نصب خالی است." }
@@ -246,6 +317,7 @@ object ViewerAccessPolicy {
             createdAt = existing?.createdAt ?: user.createdAt.takeIf { it > 0L } ?: now,
             updatedAt = now
         )
+        existing?.let { recordSpecialUserHistory(context, it) }
         val users = getSpecialUsers(context).toMutableList()
         val index = users.indexOfFirst { it.installationId.trim().equals(normalizedId, ignoreCase = true) }
         if (index >= 0) users[index] = normalized else users.add(normalized)
