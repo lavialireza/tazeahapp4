@@ -623,6 +623,7 @@ private fun FootnotesSection(
     var showDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<FootnoteEntity?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
     val footnoteScope = rememberCoroutineScope()
 
     Row(
@@ -638,14 +639,45 @@ private fun FootnotesSection(
         }
     }
 
+    if (footnotes.isNotEmpty()) {
+        Spacer(Modifier.height(6.dp))
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            label = { Text("جستجوی پاورقی") },
+            placeholder = { Text("جستجو در واژه و توضیح...") },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "جستجو") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(6.dp))
+    }
+
+    val normalizedSearch = normalizeDictionaryTerm(searchQuery)
+    val visibleFootnotes = if (normalizedSearch.isBlank()) footnotes else footnotes.filter {
+        normalizeDictionaryTerm(it.term).contains(normalizedSearch) ||
+            normalizeDictionaryTerm(it.explanation).contains(normalizedSearch)
+    }
+
     if (footnotes.isEmpty()) {
         Text(
             "هنوز پاورقی‌ای برای این بخش ثبت نشده (مثلاً معنی یک واژه، توضیح مختصر یا منبع).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    } else if (visibleFootnotes.isEmpty()) {
+        Text(
+            "برای «$searchQuery» پاورقی‌ای پیدا نشد.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     } else {
-        footnotes.forEach { fn ->
+        Text(
+            "${visibleFootnotes.size} پاورقی${if (normalizedSearch.isNotBlank()) " پیدا شد" else ""}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        visibleFootnotes.forEach { fn ->
             Card(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
             ) {
