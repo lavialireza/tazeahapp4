@@ -584,7 +584,7 @@ private fun AccessTestSuiteDialog(users: List<ViewerAccessPolicy.SpecialUser>, o
         val now = System.currentTimeMillis()
         listOf(
             "شناسه‌های کاربران خالی نباشند" to users.all { it.installationId.isNotBlank() },
-            "شناسه‌ها تکراری نباشند" to users.map { it.installationId.uppercase(Locale.US) }.distinct().size == users.size,
+            "شناسه‌ها تکراری نباشند" to (users.map { it.installationId.uppercase(Locale.US) }.distinct().size == users.size),
             "کاربر فعال، سیاست مؤثر داشته باشد" to users.filter { it.enabled && (it.expiresAt == null || it.expiresAt <= 0L || it.expiresAt >= now) }.all { it.permissions.isNotEmpty() },
             "کاربر غیرفعال به مجوز عمومی سقوط نکند" to users.filter { !it.enabled }.all { ViewerAccessPolicy.policyNeedsResend(it) || it.permissions.isNotEmpty() },
             "انقضاهای گذشته قابل تشخیص باشند" to true,
@@ -596,7 +596,7 @@ private fun AccessTestSuiteDialog(users: List<ViewerAccessPolicy.SpecialUser>, o
     AlertDialog(onDismissRequest = onDismiss, title = { Text("آزمون یکپارچه دسترسی") }, text = {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
             item { Text("این آزمون داخلی Admin است و برای تأیید ارتباط واقعی Viewer باید یک ارسال واقعی نیز انجام شود.") }
-            items(tests) { (label, pass) -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label); Text(if (pass) "PASS" else "FAIL", color = if (pass) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) } }
+            items(tests.size) { index -> val (label, pass) = tests[index]; Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label); Text(if (pass) "PASS" else "FAIL", color = if (pass) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) } }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("بستن") } })
 }
@@ -609,7 +609,7 @@ private fun UserReportExportDialog(users: List<ViewerAccessPolicy.SpecialUser>, 
             val header = "name,installationId,phone,position,userType,status,createdAt,updatedAt,expiresAt,lastPolicySentAt,lastPolicyAppliedAt,lastPolicyAppliedVersion,permissions\n"
             val body = users.joinToString("\n") { u ->
                 val status = if (!u.enabled) "disabled" else if (u.expiresAt != null && u.expiresAt > 0L && System.currentTimeMillis() > u.expiresAt) "expired" else "active"
-                val perms = ViewerAccessPolicy.permissionLabels.filter { u.permissions[it.first] == true }.values.joinToString("|")
+                val perms = ViewerAccessPolicy.permissionLabels.filter { (key, _) -> u.permissions[key] == true }.values.joinToString("|")
                 listOf(u.displayName,u.installationId,u.phone,u.position,u.userType,status,u.createdAt,u.updatedAt,u.expiresAt ?: "",u.lastPolicySentAt,u.lastPolicyAppliedAt,u.lastPolicyAppliedVersion,perms).joinToString(",") { it.toString().replace("\"", "\"\"").let { "\"$it\"" } }
             }
             context.contentResolver.openOutputStream(uri)?.use { it.write((header+body).toByteArray(Charsets.UTF_8)) } ?: error("فایل قابل نوشتن نیست")
@@ -649,7 +649,8 @@ private fun SpecialUsersDashboardDialog(users: List<ViewerAccessPolicy.SpecialUs
                     Text("هشدار فوری: $expiring7Days کاربر طی ۷ روز آینده منقضی می‌شود")
                 }
                 item { Text("مجوزها بر اساس تعداد کاربران", style = MaterialTheme.typography.titleMedium) }
-                items(permissionStats) { (label, count) ->
+                items(permissionStats.size) { index ->
+                    val (label, count) = permissionStats[index]
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(label)
                         Text(count.toString(), style = MaterialTheme.typography.titleSmall)
