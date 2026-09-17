@@ -62,7 +62,7 @@ fun TextScreen(
     onRelatedClick: (SearchResult) -> Unit = {},
     footnotes: List<FootnoteEntity> = emptyList(),
     saveError: String? = null,
-    onAddFootnote: (term: String, explanation: String) -> Unit = { _, _ -> },
+    onAddFootnote: suspend (term: String, explanation: String) -> Result<Unit> = { _, _ -> Result.failure(IllegalStateException("ذخیره پاورقی در دسترس نیست")) },
     onEditFootnote: (FootnoteEntity, term: String, explanation: String) -> Unit = { _, _, _ -> },
     onDeleteFootnote: (FootnoteEntity) -> Unit = {},
     onOpenSearch: () -> Unit = {},
@@ -530,7 +530,7 @@ fun TextScreen(
                     Prefs.setTag(context, sectionId, input)
                     tag = input.ifBlank { null }
                     showTagDialog = false
-                }) { Text("ذخیره") }
+                }) { Text(if (saving) "در حال ذخیره…" else "ذخیره") }
             },
             dismissButton = {
                 TextButton(onClick = { showTagDialog = false }) { Text("انصراف") }
@@ -606,6 +606,8 @@ private fun FootnotesSection(
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<FootnoteEntity?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val footnoteScope = rememberCoroutineScope()
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -686,21 +688,34 @@ private fun FootnotesSection(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = !saving, onClick = {
                     if (term.isBlank()) {
                         validationError = "واژه یا عبارت را وارد کنید."
                     } else if (explanation.isBlank()) {
                         validationError = "توضیح پاورقی را وارد کنید."
                     } else {
                         val current = editing
-                        if (current == null) onAdd(term.trim(), explanation.trim())
-                        else onEdit(current, term.trim(), explanation.trim())
-                        showDialog = false
+                        if (current == null) {
+                            if (saving) return@TextButton
+                            saving = true
+                            footnoteScope.launch {
+                                val result = runCatching { onAdd(term.trim(), explanation.trim()) }.getOrElse { Result.failure(it) }
+                                saving = false
+                                result.onSuccess {
+                                    showDialog = false
+                                }.onFailure {
+                                    validationError = "ذخیره پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}"
+                                }
+                            }
+                        } else {
+                            onEdit(current, term.trim(), explanation.trim())
+                            showDialog = false
+                        }
                     }
-                }) { Text("ذخیره") }
+                }) { Text(if (saving) "در حال ذخیره…" else "ذخیره") }
             },
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) { Text("انصراف") }
+                TextButton(enabled = !saving, onClick = { showDialog = false }) { Text("انصراف") }
             }
         )
     }

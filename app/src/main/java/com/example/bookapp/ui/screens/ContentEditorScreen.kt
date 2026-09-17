@@ -232,17 +232,7 @@ fun ContentEditorScreen(
                 scope.launch { busy = true; try { if (d.value == null) db.sectionDao().insert(SectionEntity(roleId = d.parentRoleId, orderIndex = order, title = title, content = content, audioUrl = audio.ifBlank { null })) else db.sectionDao().updateFromContent(d.value.id, d.parentRoleId, title, content, audio.ifBlank { null }, order, d.value.uid, d.value.sourceUid); reload(); message = "بخش ذخیره شد." } finally { busy = false; dialog = null } }
             }
             is EditorDialog.Footnote -> FootnoteDialog(d.value, d.sectionId, { dialog = null }) { term, explanation ->
-                scope.launch { busy = true; try { if (d.value == null) {
-                    val cleanTerm = term.trim()
-                    val cleanExplanation = explanation.trim()
-                    require(cleanTerm.isNotBlank()) { "واژه یا عبارت خالی است." }
-                    require(cleanExplanation.isNotBlank()) { "توضیح پاورقی خالی است." }
-                    val insertedId = db.footnoteDao().insert(FootnoteEntity(sectionId = d.sectionId, term = cleanTerm, explanation = cleanExplanation, uid = com.example.bookapp.data.ContentUid.new()))
-                    check(db.footnoteDao().getBySection(d.sectionId).any { it.id == insertedId }) { "پانویس در پایگاه داده ثبت نشد." }
-                } else {
-                    db.footnoteDao().update(d.value.copy(sectionId = d.sectionId, term = term.trim(), explanation = explanation.trim()))
-                }
-                footnotes = db.footnoteDao().getBySection(d.sectionId); message = "پانویس ذخیره شد." } finally { busy = false; dialog = null } }
+                scope.launch { busy = true; try { if (d.value == null) db.footnoteDao().insert(FootnoteEntity(sectionId = d.sectionId, term = term, explanation = explanation)) else db.footnoteDao().update(d.value.copy(sectionId = d.sectionId, term = term, explanation = explanation)); footnotes = db.footnoteDao().getBySection(d.sectionId); message = "پانویس ذخیره شد." } finally { busy = false; dialog = null } }
             }
         }
     }

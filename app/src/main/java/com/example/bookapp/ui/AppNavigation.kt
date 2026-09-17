@@ -1351,30 +1351,37 @@ fun AppNavigation(
                 onRelatedClick = { related -> navController.navigate("text/${related.sectionId}") },
                 footnotes = if (featureEnabled("footnotes")) footnotes else emptyList(),
                 saveError = footnoteError,
-                onAddFootnote = { term, explanation -> if (featureEnabled("footnotes")) scope.launch {
-                    footnoteError = null
-                    runCatching {
-                        val cleanTerm = term.trim()
-                        val cleanExplanation = explanation.trim()
-                        require(cleanTerm.isNotBlank()) { "واژه یا عبارت خالی است." }
-                        require(cleanExplanation.isNotBlank()) { "توضیح پاورقی خالی است." }
-                        val insertedId = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            db.footnoteDao().insert(
+                onAddFootnote = { term, explanation ->
+                    if (!featureEnabled("footnotes")) {
+                        Result.failure(IllegalStateException("قابلیت پاورقی در سیاست دسترسی فعلی فعال نیست."))
+                    } else {
+                        runCatching {
+                            val section = db.sectionDao().getById(sectionId)
+                            val cleanTerm = term.trim()
+                            val cleanExplanation = explanation.trim()
+                            require(cleanTerm.isNotEmpty()) { "واژه یا عبارت خالی است" }
+                            require(cleanExplanation.isNotEmpty()) { "توضیح پاورقی خالی است" }
+                            val uid = com.example.bookapp.data.ContentUid.new()
+                            val insertedId = db.footnoteDao().insert(
                                 com.example.bookapp.data.FootnoteEntity(
-                                    sectionId = sectionId,
+                                    sectionId = section.id,
                                     term = cleanTerm,
                                     explanation = cleanExplanation,
-                                    uid = com.example.bookapp.data.ContentUid.new()
+                                    uid = uid
                                 )
                             )
+                            require(insertedId > 0L) { "شناسه پاورقی ایجاد نشد" }
+                            val saved = db.footnoteDao().getByUid(uid)
+                            require(saved != null && saved.id == insertedId && saved.sectionId == section.id) {
+                                "پاورقی در پایگاه داده تأیید نشد"
+                            }
+                            reloadFootnotes()
+                            footnoteError = null
+                        }.onFailure {
+                            footnoteError = "ذخیره پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}"
                         }
-                        val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            db.footnoteDao().getBySection(sectionId).any { it.id == insertedId }
-                        }
-                        check(saved) { "پاورقی در پایگاه داده ثبت نشد." }
-                        reloadFootnotes()
-                    }.onFailure { footnoteError = "ذخیره پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
-                } },
+                    }
+                },
                 onEditFootnote = { fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
                     footnoteError = null
                     runCatching {
