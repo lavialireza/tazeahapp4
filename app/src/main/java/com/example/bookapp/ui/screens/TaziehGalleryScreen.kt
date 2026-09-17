@@ -46,6 +46,7 @@ fun TaziehGalleryScreen(
     onDeleteImage: (TaziehImageItem) -> Unit,
     onUpdateCaption: (TaziehImageItem, String) -> Unit,
     readOnly: Boolean = false,
+    canAddImage: Boolean = !readOnly,
     errorMessage: String? = null,
     onBack: () -> Unit
 ) {
@@ -69,7 +70,7 @@ fun TaziehGalleryScreen(
             )
         },
         floatingActionButton = {
-            if (!readOnly) ExtendedFloatingActionButton(
+            if (canAddImage) ExtendedFloatingActionButton(
                 text = { Text("افزودن عکس") },
                 icon = { Icon(Icons.Filled.AddAPhoto, contentDescription = null) },
                 onClick = { pickImageLauncher.launch("image/*") }

@@ -1165,6 +1165,7 @@ fun AppNavigation(
                     }
                 },
                 readOnly = publicViewer,
+                canAddImage = featureEnabled("gallery"),
                 errorMessage = galleryError,
                 onBack = { navController.popBackStack() }
             )
