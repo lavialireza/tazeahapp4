@@ -1,6 +1,7 @@
 package com.example.bookapp.data
 
 import android.content.Context
+import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.SecureRandom
@@ -43,6 +44,7 @@ object ViewerAccessPolicy {
     private const val KEY_POLICY_VERSION = "policy_version"
     private const val KEY_IMPORTED_PUBLIC_VERSION = "imported_public_version"
     private const val KEY_IMPORTED_PUBLIC = "imported_public_permissions"
+    private const val SPECIAL_USERS_FILE = "viewer_access_special_users.json"
 
     fun defaultPermissions(): Map<String, Boolean> = permissionLabels.keys.associateWith { key ->
         key !in setOf("copy", "share", "pdf", "appIntro")
@@ -103,14 +105,25 @@ object ViewerAccessPolicy {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_POLICY_VERSION, 1)
 
     fun getSpecialUsers(context: Context): List<SpecialUser> {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_SPECIAL, "[]") ?: "[]"
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefRaw = prefs.getString(KEY_SPECIAL, null)
+        val file = File(context.filesDir, SPECIAL_USERS_FILE)
+        // فایل داخلی به عنوان پشتیبان پایدار نگه داشته می‌شود. اگر SharedPreferences
+        // خالی/خراب باشد، رکوردهای ذخیره‌شده از فایل بازیابی می‌شوند.
+        val raw = when {
+            !prefRaw.isNullOrBlank() -> prefRaw
+            file.exists() -> runCatching { file.readText(Charsets.UTF_8) }.getOrNull()
+            else -> null
+        } ?: "[]"
         return runCatching {
             val arr = JSONArray(raw)
-            (0 until arr.length()).map { i ->
+            (0 until arr.length()).mapNotNull { i ->
                 val o = arr.getJSONObject(i)
+                val id = o.optString("installationId").trim().uppercase(java.util.Locale.US)
+                if (id.isBlank()) return@mapNotNull null
                 val p = o.optJSONObject("permissions")
                 val perms = permissionLabels.keys.associateWith { p?.optBoolean(it, false) ?: false }
-                SpecialUser(o.optString("installationId"), o.optString("profile", PROFILE_CUSTOM),
+                SpecialUser(id, o.optString("profile", PROFILE_CUSTOM),
                     if (o.isNull("expiresAt")) null else o.optLong("expiresAt"), perms)
             }
         }.getOrElse { emptyList() }
@@ -128,8 +141,21 @@ object ViewerAccessPolicy {
         val next = prefs.getInt(KEY_POLICY_VERSION, 1) + 1
         // commit() is intentional here: the Admin screen immediately reloads the list
         // and the policy may be exported to Viewer in the same UI action.
-        val saved = prefs.edit().putString(KEY_SPECIAL, arr.toString()).putInt(KEY_POLICY_VERSION, next).commit()
-        check(saved) { "ذخیره کاربران خاص انجام نشد." }
+        val json = arr.toString()
+        val saved = prefs.edit().putString(KEY_SPECIAL, json).putInt(KEY_POLICY_VERSION, next).commit()
+        check(saved) { "ذخیره کاربران خاص در حافظه برنامه انجام نشد." }
+        // یک نسخه مستقل در حافظه داخلی برنامه هم نگه می‌داریم تا رکورد کاربر خاص
+        // با بازشدن دوباره صفحه/فرآیند برنامه قابل بازیابی باشد.
+        val file = File(context.filesDir, SPECIAL_USERS_FILE)
+        val tmp = File(context.filesDir, "$SPECIAL_USERS_FILE.tmp")
+        runCatching {
+            tmp.writeText(json, Charsets.UTF_8)
+            if (!tmp.renameTo(file)) {
+                file.writeText(json, Charsets.UTF_8)
+                tmp.delete()
+            }
+        }.getOrElse { throw IllegalStateException("فایل پایدار کاربران خاص ذخیره نشد: ${it.message ?: "خطای نامشخص"}", it) }
+        check(file.exists() && file.readText(Charsets.UTF_8) == json) { "تأیید ذخیره کاربران خاص انجام نشد." }
     }
 
     fun upsertSpecialUser(context: Context, user: SpecialUser) {
@@ -156,7 +182,7 @@ object ViewerAccessPolicy {
         prefs.getString("installation_id", null)?.let { return it }
         val bytes = ByteArray(6); SecureRandom().nextBytes(bytes)
         val id = "VWR-" + bytes.joinToString("") { "%02X".format(it) }.chunked(4).joinToString("-")
-        prefs.edit().putString("installation_id", id).apply()
+        prefs.edit().putString("installation_id", id).commit().also { ok -> check(ok) { "شناسه نصب ذخیره نشد." } }
         return id
     }
 

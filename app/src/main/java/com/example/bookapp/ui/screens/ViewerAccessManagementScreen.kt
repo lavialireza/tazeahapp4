@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -145,7 +146,17 @@ fun ViewerAccessManagementScreen(
                     }
                 }
             }
-            item { Text("کاربران خاص (${specialUsers.size})", style = MaterialTheme.typography.titleMedium) }
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("کاربران خاص (${specialUsers.size})", style = MaterialTheme.typography.titleMedium)
+                    IconButton(onClick = {
+                        specialUsers = ViewerAccessPolicy.getSpecialUsers(context)
+                        message = "فهرست کاربران خاص از حافظه پایدار دوباره بارگذاری شد."
+                    }) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "بارگذاری مجدد")
+                    }
+                }
+            }
             items(specialUsers, key = { it.installationId }) { user ->
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
