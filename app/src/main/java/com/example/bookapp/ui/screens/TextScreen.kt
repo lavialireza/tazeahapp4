@@ -597,6 +597,21 @@ private fun reportContentIssue(context: Context, title: String, content: String,
  * پاورقی: توضیح واژه‌ها/عبارت‌های یک بخش (معنی لغت، توضیح مختصر، منبع و ...).
  * کاملاً توسط خود کاربر نوشته، ذخیره و ویرایش می‌شود؛ چیزی از پیش تولید نمی‌شود.
  */
+private fun normalizeDictionaryTerm(value: String): String = value
+    .trim()
+    .replace('ي', 'ی')
+    .replace('ك', 'ک')
+    .replace('ۀ', 'ه')
+    .replace('ة', 'ه')
+    .replace(Regex("\\s+"), " ")
+
+private fun isAlreadyInDictionary(term: String): Boolean {
+    val normalized = normalizeDictionaryTerm(term)
+    return normalized.isNotEmpty() && GLOSSARY_TERMS.any {
+        normalizeDictionaryTerm(it.term) == normalized
+    }
+}
+
 @Composable
 private fun FootnotesSection(
     footnotes: List<FootnoteEntity>,
@@ -714,8 +729,11 @@ private fun FootnotesSection(
                     } else if (explanation.isBlank()) {
                         validationError = "توضیح پاورقی را وارد کنید."
                     } else {
+                        val cleanTerm = normalizeDictionaryTerm(term)
                         val current = editing
-                        if (current == null) {
+                        if (current == null && isAlreadyInDictionary(cleanTerm)) {
+                            validationError = "این واژه قبلاً در دیکشنری وجود دارد و دوباره ثبت نمی‌شود."
+                        } else if (current == null) {
                             if (saving) return@TextButton
                             saving = true
                             footnoteScope.launch {
