@@ -737,6 +737,10 @@ fun TextPagerScreen(
     onOpenSettings: () -> Unit = {},
     onAttachAudio: (sectionId: Long, uri: android.net.Uri) -> Unit = { _, _ -> },
     onRemoveAudio: (sectionId: Long) -> Unit = {},
+    footnotesForSection: suspend (Long) -> List<com.example.bookapp.data.FootnoteEntity> = { emptyList() },
+    onAddFootnote: suspend (Long, String, String) -> Result<Unit> = { _, _, _ -> Result.failure(IllegalStateException("ذخیره پاورقی در دسترس نیست")) },
+    onEditFootnote: (Long, com.example.bookapp.data.FootnoteEntity, String, String) -> Unit = { _, _, _, _ -> },
+    onDeleteFootnote: (Long, com.example.bookapp.data.FootnoteEntity) -> Unit = { _, _ -> },
     fieldTitle: String? = null,
     taziehTitle: String? = null,
     roleTitle: String? = null,
@@ -762,6 +766,8 @@ fun TextPagerScreen(
         }
         androidx.compose.foundation.pager.HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
         val section = sections[page]
+        var pageFootnotes by remember(section.id) { mutableStateOf(listOf<com.example.bookapp.data.FootnoteEntity>()) }
+        LaunchedEffect(section.id) { pageFootnotes = footnotesForSection(section.id) }
         Column(Modifier.fillMaxSize()) {
             TextScreen(
                 title = "${section.title}  (${page + 1}/${sections.size})",
@@ -782,6 +788,20 @@ fun TextPagerScreen(
                 },
                 onAttachAudio = { uri -> onAttachAudio(section.id, uri) },
                 onRemoveAudio = { onRemoveAudio(section.id) },
+                footnotes = pageFootnotes,
+                onAddFootnote = { term, explanation ->
+                    val result = onAddFootnote(section.id, term, explanation)
+                    if (result.isSuccess) pageFootnotes = footnotesForSection(section.id)
+                    result
+                },
+                onEditFootnote = { fn, term, explanation ->
+                    onEditFootnote(section.id, fn, term, explanation)
+                    pagerScope.launch { pageFootnotes = footnotesForSection(section.id) }
+                },
+                onDeleteFootnote = { fn ->
+                    onDeleteFootnote(section.id, fn)
+                    pagerScope.launch { pageFootnotes = footnotesForSection(section.id) }
+                },
                 fieldTitle = fieldTitle,
                 taziehTitle = taziehTitle,
                 roleTitle = roleTitle,

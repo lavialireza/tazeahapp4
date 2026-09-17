@@ -1294,6 +1294,27 @@ fun AppNavigation(
                             sections = db.sectionDao().getByRole(roleId)
                         }
                     },
+                    footnotesForSection = { id -> db.footnoteDao().getBySection(id) },
+                    onAddFootnote = { id, term, explanation ->
+                        if (!featureEnabled("footnotes")) {
+                            Result.failure(IllegalStateException("قابلیت پاورقی در سیاست دسترسی فعلی فعال نیست."))
+                        } else runCatching {
+                            val cleanTerm = term.trim()
+                            val cleanExplanation = explanation.trim()
+                            require(cleanTerm.isNotEmpty()) { "واژه یا عبارت خالی است" }
+                            require(cleanExplanation.isNotEmpty()) { "توضیح پاورقی خالی است" }
+                            val uid = com.example.bookapp.data.ContentUid.new()
+                            val insertedId = db.footnoteDao().insert(com.example.bookapp.data.FootnoteEntity(
+                                sectionId = id, term = cleanTerm, explanation = cleanExplanation, uid = uid
+                            ))
+                            require(insertedId > 0L) { "شناسه پاورقی ایجاد نشد" }
+                            require(db.footnoteDao().getByUid(uid) != null) { "پاورقی در پایگاه داده تأیید نشد" }
+                        }
+                    },
+                    onEditFootnote = { id, fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
+                        db.footnoteDao().update(fn.copy(sectionId = id, term = term.trim(), explanation = explanation.trim()))
+                    } },
+                    onDeleteFootnote = { _, fn -> if (featureEnabled("footnotes")) scope.launch { db.footnoteDao().delete(fn.id) } },
                     fieldTitle = breadcrumb.first,
                     taziehTitle = breadcrumb.second,
                     roleTitle = breadcrumb.third,
