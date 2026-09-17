@@ -66,6 +66,7 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                     .put("otherDetails", u.otherDetails).put("enabled", u.enabled).put("createdAt", u.createdAt)
                      .put("updatedAt", u.updatedAt).put("lastPolicySentAt", u.lastPolicySentAt)
                      .put("lastPolicySentFingerprint", u.lastPolicySentFingerprint)
+                     .put("lastPolicySentVersion", u.lastPolicySentVersion)
                      .put("lastPolicyAppliedAt", u.lastPolicyAppliedAt).put("lastPolicyAppliedVersion", u.lastPolicyAppliedVersion)
                 if (u.expiresAt == null) o.put("expiresAt", org.json.JSONObject.NULL) else o.put("expiresAt", u.expiresAt)
                 val pp = org.json.JSONObject(); ViewerAccessPolicy.permissionLabels.keys.forEach { k -> pp.put(k, u.permissions[k] == true) }
@@ -277,7 +278,7 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                 require(newId.trim().isNotBlank()) { "شناسه نصب جدید خالی است." }
                 require(users.none { it.installationId.equals(newId.trim(), ignoreCase = true) }) { "این شناسه قبلاً ثبت شده است." }
                 val now = System.currentTimeMillis()
-                val copy = source.copy(installationId = newId.trim().uppercase(Locale.US), displayName = newName.trim(), createdAt = now, updatedAt = now, lastPolicySentAt = 0L, lastPolicySentFingerprint = "", lastPolicyAppliedAt = 0L, lastPolicyAppliedVersion = 0)
+                val copy = source.copy(installationId = newId.trim().uppercase(Locale.US), displayName = newName.trim(), createdAt = now, updatedAt = now, lastPolicySentAt = 0L, lastPolicySentFingerprint = "", lastPolicySentVersion = 0, lastPolicyAppliedAt = 0L, lastPolicyAppliedVersion = 0)
                 ViewerAccessPolicy.upsertSpecialUser(context, copy)
                 AccessAuditLog.record(context, "ایجاد کاربر از روی الگوی مجوز", copy, "مجوزهای کاربر ${source.installationId} به عنوان الگو کپی شد.")
                 reload(); message = "کاربر جدید با مجوزهای کپی‌شده ایجاد شد؛ سیاست آن هنوز برای Viewer ارسال نشده است."
@@ -309,6 +310,7 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                                 createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
                                 lastPolicySentAt = o.optLong("lastPolicySentAt", 0L),
                                 lastPolicySentFingerprint = o.optString("lastPolicySentFingerprint", ""),
+                                lastPolicySentVersion = o.optInt("lastPolicySentVersion", 0),
                                 lastPolicyAppliedAt = o.optLong("lastPolicyAppliedAt", 0L),
                                 lastPolicyAppliedVersion = o.optInt("lastPolicyAppliedVersion", 0)
                             )
@@ -421,6 +423,7 @@ private fun SpecialUserEditorDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = {
                     runCatching {
+                        val policyVersion = ViewerAccessPolicy.getPolicyVersion(context, user.installationId)
                         val uri = ViewerAccessTransfer.createShareUri(context, user.installationId)
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "application/json"
@@ -429,7 +432,7 @@ private fun SpecialUserEditorDialog(
                             setPackage("com.example.bookapp.viewer")
                         }
                         context.startActivity(intent)
-                        val sentUser = ViewerAccessPolicy.markPolicySent(context, user.installationId) ?: user.copy(lastPolicySentAt = System.currentTimeMillis())
+                        val sentUser = ViewerAccessPolicy.markPolicySent(context, user.installationId, policyVersion) ?: user.copy(lastPolicySentAt = System.currentTimeMillis(), lastPolicySentVersion = policyVersion)
                         AccessAuditLog.record(context, "ارسال سیاست", sentUser, "سیاست دسترسی برای Viewer ارسال شد.")
                         onMessage("سیاست برای «${sentUser.displayName.ifBlank { sentUser.installationId }}» ارسال شد و زمان ارسال ثبت شد.")
                     }.onFailure {
@@ -543,6 +546,7 @@ private fun BulkPolicySendDialog(
                     var failed = 0
                     users.forEach { user ->
                         try {
+                            val policyVersion = ViewerAccessPolicy.getPolicyVersion(context, user.installationId)
                             val uri = ViewerAccessTransfer.createShareUri(context, user.installationId)
                             val intent = Intent(Intent.ACTION_SEND)
                             intent.type = "application/json"
@@ -550,7 +554,7 @@ private fun BulkPolicySendDialog(
                             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             intent.setPackage("com.example.bookapp.viewer")
                             context.startActivity(intent)
-                            val sent = ViewerAccessPolicy.markPolicySent(context, user.installationId)
+                            val sent = ViewerAccessPolicy.markPolicySent(context, user.installationId, policyVersion)
                             if (sent != null) {
                                 AccessAuditLog.record(context, "ارسال گروهی سیاست", sent, "سیاست برای کاربر آماده و به Viewer ارسال شد.")
                                 ok++

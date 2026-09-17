@@ -50,6 +50,7 @@ object ViewerAccessPolicy {
         val updatedAt: Long = System.currentTimeMillis(),
         val lastPolicySentAt: Long = 0L,
         val lastPolicySentFingerprint: String = "",
+        val lastPolicySentVersion: Int = 0,
         val lastPolicyAppliedAt: Long = 0L,
         val lastPolicyAppliedVersion: Int = 0
     )
@@ -200,6 +201,7 @@ object ViewerAccessPolicy {
                     updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
                     lastPolicySentAt = o.optLong("lastPolicySentAt", 0L),
                     lastPolicySentFingerprint = o.optString("lastPolicySentFingerprint", ""),
+                    lastPolicySentVersion = o.optInt("lastPolicySentVersion", 0),
                     lastPolicyAppliedAt = o.optLong("lastPolicyAppliedAt", 0L),
                     lastPolicyAppliedVersion = o.optInt("lastPolicyAppliedVersion", 0)
                 )
@@ -225,6 +227,7 @@ object ViewerAccessPolicy {
                 .put("updatedAt", user.updatedAt)
             .put("lastPolicySentAt", user.lastPolicySentAt)
             .put("lastPolicySentFingerprint", user.lastPolicySentFingerprint)
+            .put("lastPolicySentVersion", user.lastPolicySentVersion)
             .put("lastPolicyAppliedAt", user.lastPolicyAppliedAt)
             .put("lastPolicyAppliedVersion", user.lastPolicyAppliedVersion)
             if (user.expiresAt == null) o.put("expiresAt", JSONObject.NULL) else o.put("expiresAt", user.expiresAt)
@@ -279,6 +282,7 @@ object ViewerAccessPolicy {
             .put("updatedAt", user.updatedAt)
             .put("lastPolicySentAt", user.lastPolicySentAt)
             .put("lastPolicySentFingerprint", user.lastPolicySentFingerprint)
+            .put("lastPolicySentVersion", user.lastPolicySentVersion)
         if (user.expiresAt == null) o.put("expiresAt", JSONObject.NULL) else o.put("expiresAt", user.expiresAt)
         val p = JSONObject(); permissionLabels.keys.forEach { p.put(it, user.permissions[it] == true) }; o.put("permissions", p)
         return o
@@ -297,6 +301,7 @@ object ViewerAccessPolicy {
             createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
             lastPolicySentAt = o.optLong("lastPolicySentAt", 0L),
                     lastPolicySentFingerprint = o.optString("lastPolicySentFingerprint", ""),
+                    lastPolicySentVersion = o.optInt("lastPolicySentVersion", 0),
                     lastPolicyAppliedAt = o.optLong("lastPolicyAppliedAt", 0L),
                     lastPolicyAppliedVersion = o.optInt("lastPolicyAppliedVersion", 0)
         )
@@ -367,15 +372,17 @@ object ViewerAccessPolicy {
     }
 
     /** زمان آخرین ارسال موفق سیاست برای کاربر خاص را ثبت می‌کند. */
-    fun markPolicySent(context: Context, installationId: String): SpecialUser? {
+    fun markPolicySent(context: Context, installationId: String, policyVersion: Int): SpecialUser? {
         val normalizedId = installationId.trim().uppercase(Locale.US)
         val users = getSpecialUsers(context).toMutableList()
         val index = users.indexOfFirst { it.installationId.trim().uppercase(Locale.US) == normalizedId }
         if (index < 0) return null
         val current = users[index]
+        require(policyVersion > 0) { "نسخه سیاست نامعتبر است." }
         val updated = current.copy(
             lastPolicySentAt = System.currentTimeMillis(),
-            lastPolicySentFingerprint = policyFingerprint(current)
+            lastPolicySentFingerprint = policyFingerprint(current),
+            lastPolicySentVersion = policyVersion
         )
         users[index] = updated
         saveSpecialUsers(context, users, bumpVersion = false)
@@ -386,12 +393,14 @@ object ViewerAccessPolicy {
     }
 
     /** ثبت تأیید دریافت/اعمال سیاست که از Viewer برگشته است؛ بدون افزایش نسخه سیاست. */
-    fun markPolicyApplied(context: Context, installationId: String, version: Int): SpecialUser? {
+    fun markPolicyApplied(context: Context, installationId: String, version: Int, fingerprint: String): SpecialUser? {
         val normalizedId = installationId.trim().uppercase(Locale.US)
         val users = getSpecialUsers(context).toMutableList()
         val index = users.indexOfFirst { it.installationId.trim().uppercase(Locale.US) == normalizedId }
         if (index < 0) return null
         val current = users[index]
+        require(current.lastPolicySentVersion == version) { "تأیید Viewer مربوط به آخرین سیاست ارسال‌شده نیست." }
+        require(current.lastPolicySentFingerprint.isNotBlank() && current.lastPolicySentFingerprint == fingerprint) { "اثر انگشت سیاست اعمال‌شده با سیاست ارسال‌شده مطابقت ندارد." }
         val updated = current.copy(lastPolicyAppliedAt = System.currentTimeMillis(), lastPolicyAppliedVersion = version)
         users[index] = updated
         saveSpecialUsers(context, users, bumpVersion = false)

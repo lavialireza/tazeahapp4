@@ -13,8 +13,9 @@ class PolicyAppliedReceiver : BroadcastReceiver() {
         if (com.example.bookapp.BuildConfig.PUBLIC_VIEWER) return
         val id = intent.getStringExtra("installationId")?.trim()?.uppercase(java.util.Locale.US) ?: return
         val version = intent.getIntExtra("policyVersion", 0)
-        if (version <= 0) return
-        val updated = ViewerAccessPolicy.markPolicyApplied(context, id, version) ?: return
+        val fingerprint = intent.getStringExtra("policyFingerprint")?.trim().orEmpty()
+        if (version <= 0 || fingerprint.isBlank()) return
+        val updated = runCatching { ViewerAccessPolicy.markPolicyApplied(context, id, version, fingerprint) }.getOrNull() ?: return
         AccessAuditLog.record(context, "تأیید اعمال سیاست", updated, "Viewer تأیید کرد که سیاست نسخه $version روی دستگاه اعمال شده است.")
     }
 }

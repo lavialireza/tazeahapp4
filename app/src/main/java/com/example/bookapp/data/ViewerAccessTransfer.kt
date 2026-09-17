@@ -42,6 +42,7 @@ object ViewerAccessTransfer {
             .put("expiresAt", if (target == TARGET_PUBLIC) JSONObject.NULL else specialUser?.expiresAt ?: JSONObject.NULL)
             .put("profile", if (target == TARGET_PUBLIC) ViewerAccessPolicy.PROFILE_PUBLIC else specialUser?.profile ?: ViewerAccessPolicy.PROFILE_CUSTOM)
         .put("enabled", if (target == TARGET_PUBLIC) true else specialUser?.enabled ?: false)
+            .put("policyFingerprint", if (target == TARGET_PUBLIC) "" else ViewerAccessPolicy.policyFingerprint(specialUser ?: error("کاربر موردنظر پیدا نشد.")))
         val p = JSONObject(); ViewerAccessPolicy.permissionLabels.keys.forEach { p.put(it, permissions[it] == true) }
         root.put("permissions", p)
         val unsigned = root.toString()
@@ -95,6 +96,7 @@ object ViewerAccessTransfer {
                     setPackage("com.example.bookapp")
                     putExtra("installationId", ownId)
                     putExtra("policyVersion", version)
+                    putExtra("policyFingerprint", payload.optString("policyFingerprint", ""))
                     putExtra("appliedAt", System.currentTimeMillis())
                 })
             }
