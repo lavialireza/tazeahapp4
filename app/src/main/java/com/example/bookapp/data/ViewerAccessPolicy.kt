@@ -46,7 +46,8 @@ object ViewerAccessPolicy {
         val otherDetails: String = "",
         val enabled: Boolean = true,
         val createdAt: Long = System.currentTimeMillis(),
-        val updatedAt: Long = System.currentTimeMillis()
+        val updatedAt: Long = System.currentTimeMillis(),
+        val lastPolicySentAt: Long = 0L
     )
 
     private const val PREFS = "viewer_access_policy"
@@ -192,13 +193,14 @@ object ViewerAccessPolicy {
                     otherDetails = o.optString("otherDetails", ""),
                     enabled = o.optBoolean("enabled", true),
                     createdAt = o.optLong("createdAt", System.currentTimeMillis()),
-                    updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+                    updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
+                    lastPolicySentAt = o.optLong("lastPolicySentAt", 0L)
                 )
             }
         }.getOrElse { emptyList() }
     }
 
-    fun saveSpecialUsers(context: Context, users: List<SpecialUser>) {
+    fun saveSpecialUsers(context: Context, users: List<SpecialUser>, bumpVersion: Boolean = true) {
         val arr = JSONArray()
         users.forEach { user ->
             val o = JSONObject()
@@ -214,6 +216,7 @@ object ViewerAccessPolicy {
                 .put("enabled", user.enabled)
                 .put("createdAt", user.createdAt)
                 .put("updatedAt", user.updatedAt)
+            .put("lastPolicySentAt", user.lastPolicySentAt)
             if (user.expiresAt == null) o.put("expiresAt", JSONObject.NULL) else o.put("expiresAt", user.expiresAt)
             val p = JSONObject(); permissionLabels.keys.forEach { p.put(it, user.permissions[it] == true) }
             o.put("permissions", p); arr.put(o)
@@ -223,7 +226,9 @@ object ViewerAccessPolicy {
         // commit() is intentional here: the Admin screen immediately reloads the list
         // and the policy may be exported to Viewer in the same UI action.
         val json = arr.toString()
-        val saved = prefs.edit().putString(KEY_SPECIAL, json).putInt(KEY_POLICY_VERSION, next).commit()
+        val editor = prefs.edit().putString(KEY_SPECIAL, json)
+        if (bumpVersion) editor.putInt(KEY_POLICY_VERSION, next)
+        val saved = editor.commit()
         check(saved) { "ذخیره کاربران خاص در حافظه برنامه انجام نشد." }
         // یک نسخه مستقل در حافظه داخلی برنامه هم نگه می‌داریم تا رکورد کاربر خاص
         // با بازشدن دوباره صفحه/فرآیند برنامه قابل بازیابی باشد.
@@ -262,6 +267,7 @@ object ViewerAccessPolicy {
             .put("enabled", user.enabled)
             .put("createdAt", user.createdAt)
             .put("updatedAt", user.updatedAt)
+            .put("lastPolicySentAt", user.lastPolicySentAt)
         if (user.expiresAt == null) o.put("expiresAt", JSONObject.NULL) else o.put("expiresAt", user.expiresAt)
         val p = JSONObject(); permissionLabels.keys.forEach { p.put(it, user.permissions[it] == true) }; o.put("permissions", p)
         return o
@@ -277,7 +283,8 @@ object ViewerAccessPolicy {
             displayName = o.optString("displayName"), details = o.optString("details"), phone = o.optString("phone"),
             address = o.optString("address"), position = o.optString("position"), userType = o.optString("userType"),
             otherDetails = o.optString("otherDetails"), enabled = o.optBoolean("enabled", true),
-            createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+            createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
+            lastPolicySentAt = o.optLong("lastPolicySentAt", 0L)
         )
     }
 
@@ -324,6 +331,21 @@ object ViewerAccessPolicy {
         saveSpecialUsers(context, users)
         bumpPolicyVersion(context, normalizedId)
         check(getSpecialUsers(context).any { it.installationId == normalizedId }) { "کاربر خاص پس از ذخیره قابل بازیابی نیست." }
+    }
+
+    /** زمان آخرین ارسال موفق سیاست برای کاربر خاص را ثبت می‌کند. */
+    fun markPolicySent(context: Context, installationId: String): SpecialUser? {
+        val normalizedId = installationId.trim().uppercase(Locale.US)
+        val users = getSpecialUsers(context).toMutableList()
+        val index = users.indexOfFirst { it.installationId.trim().uppercase(Locale.US) == normalizedId }
+        if (index < 0) return null
+        val updated = users[index].copy(lastPolicySentAt = System.currentTimeMillis())
+        users[index] = updated
+        saveSpecialUsers(context, users, bumpVersion = false)
+        check(getSpecialUsers(context).firstOrNull { it.installationId == normalizedId }?.lastPolicySentAt == updated.lastPolicySentAt) {
+            "زمان آخرین ارسال سیاست ذخیره نشد."
+        }
+        return updated
     }
 
     fun removeSpecialUser(context: Context, installationId: String) {

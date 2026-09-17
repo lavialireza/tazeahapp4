@@ -55,7 +55,7 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                     .put("displayName", u.displayName).put("details", u.details).put("phone", u.phone)
                     .put("address", u.address).put("position", u.position).put("userType", u.userType)
                     .put("otherDetails", u.otherDetails).put("enabled", u.enabled).put("createdAt", u.createdAt)
-                    .put("updatedAt", u.updatedAt)
+                     .put("updatedAt", u.updatedAt).put("lastPolicySentAt", u.lastPolicySentAt)
                 if (u.expiresAt == null) o.put("expiresAt", org.json.JSONObject.NULL) else o.put("expiresAt", u.expiresAt)
                 val pp = org.json.JSONObject(); ViewerAccessPolicy.permissionLabels.keys.forEach { k -> pp.put(k, u.permissions[k] == true) }
                 o.put("permissions", pp); arr.put(o)
@@ -172,6 +172,7 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                                 if (user.position.isNotBlank()) Text("سمت: ${user.position}", style = MaterialTheme.typography.bodySmall)
                                 Text("نوع کاربری: ${user.userType.ifBlank { user.profile }}", style = MaterialTheme.typography.bodySmall)
                                 Text("ثبت: ${dateFormat.format(Date(user.createdAt))}", style = MaterialTheme.typography.bodySmall)
+                                Text("سیاست: ${user.lastPolicySentAt.takeIf { it > 0L }?.let { dateFormat.format(Date(it)) } ?: "ارسال نشده"}", style = MaterialTheme.typography.bodySmall)
                                 Spacer(Modifier.height(6.dp))
                                 TextButton(onClick = { reportUser = user }) {
                                     Icon(Icons.Filled.Info, null); Spacer(Modifier.width(4.dp)); Text("گزارش کامل کاربر")
@@ -236,7 +237,8 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                                 displayName = o.optString("displayName"), details = o.optString("details"), phone = o.optString("phone"),
                                 address = o.optString("address"), position = o.optString("position"), userType = o.optString("userType"),
                                 otherDetails = o.optString("otherDetails"), enabled = o.optBoolean("enabled", true),
-                                createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+                                createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
+                                lastPolicySentAt = o.optLong("lastPolicySentAt", 0L)
                             )
                         }.filter { it.installationId.isNotBlank() }
                         ViewerAccessPolicy.saveSpecialUsers(context, restored)
@@ -266,6 +268,7 @@ private fun SpecialUserReportDialog(user: ViewerAccessPolicy.SpecialUser, dateFo
             item { Text("پروفایل دسترسی: ${user.profile}") }
             item { Text("ثبت اولیه: ${dateFormat.format(Date(user.createdAt))}") }
             item { Text("آخرین ویرایش: ${dateFormat.format(Date(user.updatedAt))}") }
+            item { Text("آخرین ارسال سیاست: ${user.lastPolicySentAt.takeIf { it > 0L }?.let { dateFormat.format(Date(it)) } ?: "هنوز ارسال نشده"}") }
             item { Text("انقضا: ${user.expiresAt?.let { dateFormat.format(Date(it)) } ?: "بدون انقضا"}") }
             item { Text("مجوزهای فعال: ${user.permissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}") }
             items(ViewerAccessPolicy.permissionLabels.toList().filter { user.permissions[it.first] == true }) { Text("✓ ${it.second}") }
@@ -351,7 +354,9 @@ private fun SpecialUserEditorDialog(
                             setPackage("com.example.bookapp.viewer")
                         }
                         context.startActivity(intent)
-                        AccessAuditLog.record(context, "ارسال سیاست", user, "سیاست دسترسی برای Viewer ارسال شد.")
+                        val sentUser = ViewerAccessPolicy.markPolicySent(context, user.installationId) ?: user.copy(lastPolicySentAt = System.currentTimeMillis())
+                        AccessAuditLog.record(context, "ارسال سیاست", sentUser, "سیاست دسترسی برای Viewer ارسال شد.")
+                        onMessage("سیاست برای «${sentUser.displayName.ifBlank { sentUser.installationId }}» ارسال شد و زمان ارسال ثبت شد.")
                     }.onFailure {
                         onMessage("ارسال سیاست به Viewer ناموفق بود: ${it.message ?: "خطای نامشخص"}")
                     }
