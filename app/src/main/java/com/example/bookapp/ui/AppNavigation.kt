@@ -1354,7 +1354,24 @@ fun AppNavigation(
                 onAddFootnote = { term, explanation -> if (featureEnabled("footnotes")) scope.launch {
                     footnoteError = null
                     runCatching {
-                        db.footnoteDao().insert(com.example.bookapp.data.FootnoteEntity(sectionId = sectionId, term = term.trim(), explanation = explanation.trim()))
+                        val cleanTerm = term.trim()
+                        val cleanExplanation = explanation.trim()
+                        require(cleanTerm.isNotBlank()) { "واژه یا عبارت خالی است." }
+                        require(cleanExplanation.isNotBlank()) { "توضیح پاورقی خالی است." }
+                        val insertedId = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            db.footnoteDao().insert(
+                                com.example.bookapp.data.FootnoteEntity(
+                                    sectionId = sectionId,
+                                    term = cleanTerm,
+                                    explanation = cleanExplanation,
+                                    uid = com.example.bookapp.data.ContentUid.new()
+                                )
+                            )
+                        }
+                        val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            db.footnoteDao().getBySection(sectionId).any { it.id == insertedId }
+                        }
+                        check(saved) { "پاورقی در پایگاه داده ثبت نشد." }
                         reloadFootnotes()
                     }.onFailure { footnoteError = "ذخیره پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
                 } },
