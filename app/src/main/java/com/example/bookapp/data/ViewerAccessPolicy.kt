@@ -52,6 +52,7 @@ object ViewerAccessPolicy {
     private const val KEY_PUBLIC = "public_permissions"
     private const val KEY_SPECIAL = "special_users"
     private const val KEY_POLICY_VERSION = "policy_version"
+    private const val KEY_POLICY_VERSIONS = "policy_versions"
     private const val KEY_IMPORTED_PUBLIC_VERSION = "imported_public_version"
     private const val KEY_IMPORTED_PUBLIC = "imported_public_permissions"
     private const val SPECIAL_USERS_FILE = "viewer_access_special_users.json"
@@ -71,9 +72,13 @@ object ViewerAccessPolicy {
     fun getEffectivePermissions(context: Context): Map<String, Boolean> {
         val id = installationId(context)
         val special = getSpecialUsers(context).firstOrNull { it.installationId == id }
-        if (special != null && special.enabled) {
+        if (special != null) {
+            // وجود رکورد خاص یعنی این دستگاه صراحتاً مدیریت شده است؛
+            // کاربر غیرفعال یا منقضی نباید دوباره به مجوزهای عمومی برگردد.
+            if (!special.enabled) return emptyMap()
             val expiry = special.expiresAt
-            if (expiry == null || expiry <= 0L || System.currentTimeMillis() <= expiry) return special.permissions
+            if (expiry != null && expiry > 0L && System.currentTimeMillis() > expiry) return emptyMap()
+            return special.permissions
         }
         return getPublicPermissions(context)
     }
@@ -124,11 +129,32 @@ object ViewerAccessPolicy {
         permissionLabels.keys.forEach { obj.put(it, permissions[it] == true) }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val next = prefs.getInt(KEY_POLICY_VERSION, 1) + 1
-        prefs.edit().putString(KEY_PUBLIC, obj.toString()).putInt(KEY_POLICY_VERSION, next).apply()
+        val versions = runCatching { JSONObject(prefs.getString(KEY_POLICY_VERSIONS, "{}") ?: "{}") }.getOrElse { JSONObject() }
+        versions.put("*", versions.optInt("*", 0) + 1)
+        prefs.edit().putString(KEY_PUBLIC, obj.toString()).putString(KEY_POLICY_VERSIONS, versions.toString()).putInt(KEY_POLICY_VERSION, next).apply()
     }
 
     fun getPolicyVersion(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_POLICY_VERSION, 1)
+
+    /** نسخه مستقل سیاست برای هر مقصد؛ از برخورد نسخه کاربران مختلف جلوگیری می‌کند. */
+    fun getPolicyVersion(context: Context, targetInstallationId: String): Int {
+        val target = targetInstallationId.trim().uppercase(java.util.Locale.US).ifBlank { "*" }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_POLICY_VERSIONS, null)
+        return runCatching { JSONObject(raw ?: "{}").optInt(target, 1).coerceAtLeast(1) }.getOrDefault(1)
+    }
+
+    private fun bumpPolicyVersion(context: Context, targetInstallationId: String) {
+        val target = targetInstallationId.trim().uppercase(java.util.Locale.US).ifBlank { "*" }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val obj = runCatching { JSONObject(prefs.getString(KEY_POLICY_VERSIONS, "{}") ?: "{}") }.getOrElse { JSONObject() }
+        val next = obj.optInt(target, 0).coerceAtLeast(0) + 1
+        obj.put(target, next)
+        check(prefs.edit().putString(KEY_POLICY_VERSIONS, obj.toString()).putInt(KEY_POLICY_VERSION, maxOf(prefs.getInt(KEY_POLICY_VERSION, 1), next)).commit()) {
+            "نسخه سیاست ذخیره نشد."
+        }
+    }
 
     fun getSpecialUsers(context: Context): List<SpecialUser> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -224,12 +250,15 @@ object ViewerAccessPolicy {
         val index = users.indexOfFirst { it.installationId.trim().equals(normalizedId, ignoreCase = true) }
         if (index >= 0) users[index] = normalized else users.add(normalized)
         saveSpecialUsers(context, users)
+        bumpPolicyVersion(context, normalizedId)
         check(getSpecialUsers(context).any { it.installationId == normalizedId }) { "کاربر خاص پس از ذخیره قابل بازیابی نیست." }
     }
 
     fun removeSpecialUser(context: Context, installationId: String) {
         val normalizedId = installationId.trim().uppercase(java.util.Locale.US)
+        val existed = getSpecialUsers(context).any { it.installationId.trim().uppercase(java.util.Locale.US) == normalizedId }
         saveSpecialUsers(context, getSpecialUsers(context).filterNot { it.installationId.trim().uppercase(java.util.Locale.US) == normalizedId })
+        if (existed) bumpPolicyVersion(context, normalizedId)
         check(getSpecialUsers(context).none { it.installationId.trim().uppercase(java.util.Locale.US) == normalizedId }) {
             "حذف کاربر خاص انجام نشد."
         }

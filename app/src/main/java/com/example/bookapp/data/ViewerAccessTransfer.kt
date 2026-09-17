@@ -14,6 +14,8 @@ object ViewerAccessTransfer {
     private const val TARGET_PUBLIC = "*"
     // این راز فقط برای اعتبارسنجی فایل سیاست است؛ امنیت مطلق/DRM نیست.
     private const val SHARED_SECRET = "TaziehAccessPolicy-2026-v1"
+    private const val KEY_LAST_IMPORTED_VERSION = "last_imported_policy_version"
+    private const val KEY_LAST_IMPORTED_VERSIONS = "last_imported_policy_versions"
 
     private fun sign(payload: String): String {
         val mac = Mac.getInstance("HmacSHA256")
@@ -22,9 +24,10 @@ object ViewerAccessTransfer {
     }
 
     fun buildPolicyJson(context: Context, targetInstallationId: String): String {
-        val target = targetInstallationId.ifBlank { TARGET_PUBLIC }
+        val rawTarget = targetInstallationId.trim()
+        val target = if (rawTarget.isBlank()) TARGET_PUBLIC else rawTarget.uppercase(java.util.Locale.US)
         val specialUser = if (target == TARGET_PUBLIC) null else
-            ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId == target }
+            ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId.equals(target, ignoreCase = true) }
         val permissions = if (target == TARGET_PUBLIC) {
             ViewerAccessPolicy.getPublicPermissions(context)
         } else {
@@ -33,7 +36,7 @@ object ViewerAccessTransfer {
         val root = JSONObject()
             .put("schema", SCHEMA)
             .put("targetInstallationId", target)
-            .put("policyVersion", ViewerAccessPolicy.getPolicyVersion(context))
+            .put("policyVersion", ViewerAccessPolicy.getPolicyVersion(context, target))
             .put("issuedAt", System.currentTimeMillis())
             .put("expiresAt", if (target == TARGET_PUBLIC) JSONObject.NULL else specialUser?.expiresAt ?: JSONObject.NULL)
             .put("profile", if (target == TARGET_PUBLIC) ViewerAccessPolicy.PROFILE_PUBLIC else specialUser?.profile ?: ViewerAccessPolicy.PROFILE_CUSTOM)
@@ -62,14 +65,21 @@ object ViewerAccessTransfer {
         val payload = envelope.getJSONObject("payload")
         val signature = envelope.optString("signature")
         require(signature == sign(payload.toString())) { "امضای سیاست معتبر نیست." }
-        val target = payload.optString("targetInstallationId")
-        val ownId = ViewerAccessPolicy.installationId(context)
+        val rawTarget = payload.optString("targetInstallationId").trim()
+        val target = if (rawTarget == TARGET_PUBLIC) TARGET_PUBLIC else rawTarget.uppercase(java.util.Locale.US)
+        val ownId = ViewerAccessPolicy.installationId(context).uppercase(java.util.Locale.US)
         require(target == TARGET_PUBLIC || target == ownId) { "این سیاست برای این دستگاه صادر نشده است." }
         val expiresAt = if (payload.isNull("expiresAt")) null else payload.optLong("expiresAt")
         require(expiresAt == null || expiresAt <= 0L || System.currentTimeMillis() <= expiresAt) { "تاریخ اعتبار این سیاست گذشته است." }
         val p = payload.getJSONObject("permissions")
         val permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { p.optBoolean(it, false) }
         val version = payload.optInt("policyVersion", 1)
+        require(version > 0) { "نسخه سیاست نامعتبر است." }
+        val prefs = context.getSharedPreferences("viewer_access_policy", Context.MODE_PRIVATE)
+        val versionKey = if (target == TARGET_PUBLIC) TARGET_PUBLIC else target
+        val versions = runCatching { JSONObject(prefs.getString(KEY_LAST_IMPORTED_VERSIONS, "{}") ?: "{}") }.getOrElse { JSONObject() }
+        val lastImported = versions.optInt(versionKey, prefs.getInt(KEY_LAST_IMPORTED_VERSION, 0))
+        require(version > lastImported) { "این سیاست قبلاً دریافت شده یا از سیاست فعلی قدیمی‌تر است." }
         val enabled = payload.optBoolean("enabled", true)
         if (target == TARGET_PUBLIC) {
             ViewerAccessPolicy.setImportedPublicPermissions(context, permissions, version)
@@ -77,6 +87,11 @@ object ViewerAccessTransfer {
             val profile = payload.optString("profile", ViewerAccessPolicy.PROFILE_CUSTOM)
             ViewerAccessPolicy.setImportedSpecialPermissions(context, permissions, expiresAt, version, profile, enabled)
         }
+        versions.put(versionKey, version)
+        check(prefs.edit()
+            .putString(KEY_LAST_IMPORTED_VERSIONS, versions.toString())
+            .putInt(KEY_LAST_IMPORTED_VERSION, maxOf(prefs.getInt(KEY_LAST_IMPORTED_VERSION, 0), version))
+            .commit()) { "ثبت نسخه سیاست انجام نشد." }
         "سیاست دسترسی با موفقیت اعمال شد."
     }
 }
