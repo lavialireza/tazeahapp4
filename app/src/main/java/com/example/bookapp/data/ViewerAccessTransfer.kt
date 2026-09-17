@@ -1,6 +1,7 @@
 package com.example.bookapp.data
 
 import android.content.Context
+import android.content.Intent
 import androidx.core.content.FileProvider
 import java.io.InputStream
 import java.io.OutputStream
@@ -86,6 +87,17 @@ object ViewerAccessTransfer {
         } else {
             val profile = payload.optString("profile", ViewerAccessPolicy.PROFILE_CUSTOM)
             ViewerAccessPolicy.setImportedSpecialPermissions(context, permissions, expiresAt, version, profile, enabled)
+        }
+        if (target != TARGET_PUBLIC) {
+            // تأیید اعمال واقعی را به Admin برمی‌گردانیم؛ این با «ارسال فایل» فرق دارد.
+            runCatching {
+                context.sendBroadcast(Intent("com.example.bookapp.POLICY_APPLIED").apply {
+                    setPackage("com.example.bookapp")
+                    putExtra("installationId", ownId)
+                    putExtra("policyVersion", version)
+                    putExtra("appliedAt", System.currentTimeMillis())
+                })
+            }
         }
         versions.put(versionKey, version)
         check(prefs.edit()

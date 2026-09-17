@@ -15,6 +15,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.ContentCopy
 import android.content.Intent
 import android.net.Uri
 import com.example.bookapp.data.ViewerAccessTransfer
@@ -45,6 +48,12 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
     var reportUser by remember { mutableStateOf<ViewerAccessPolicy.SpecialUser?>(null) }
     var restoreConfirm by remember { mutableStateOf<String?>(null) }
     var showDashboard by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    var showBulkSend by remember { mutableStateOf(false) }
+    var showTestSuite by remember { mutableStateOf(false) }
+    var showExportReport by remember { mutableStateOf(false) }
+    var cloneSource by remember { mutableStateOf<ViewerAccessPolicy.SpecialUser?>(null) }
+    var cloneDialog by remember { mutableStateOf<ViewerAccessPolicy.SpecialUser?>(null) }
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) runCatching {
             val root = org.json.JSONObject().put("schema", 1).put("type", "tazieh_special_users_backup")
@@ -56,6 +65,8 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                     .put("address", u.address).put("position", u.position).put("userType", u.userType)
                     .put("otherDetails", u.otherDetails).put("enabled", u.enabled).put("createdAt", u.createdAt)
                      .put("updatedAt", u.updatedAt).put("lastPolicySentAt", u.lastPolicySentAt)
+                     .put("lastPolicySentFingerprint", u.lastPolicySentFingerprint)
+                     .put("lastPolicyAppliedAt", u.lastPolicyAppliedAt).put("lastPolicyAppliedVersion", u.lastPolicyAppliedVersion)
                 if (u.expiresAt == null) o.put("expiresAt", org.json.JSONObject.NULL) else o.put("expiresAt", u.expiresAt)
                 val pp = org.json.JSONObject(); ViewerAccessPolicy.permissionLabels.keys.forEach { k -> pp.put(k, u.permissions[k] == true) }
                 o.put("permissions", pp); arr.put(o)
@@ -116,6 +127,14 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                 Spacer(Modifier.width(6.dp))
                 Text("داشبورد مدیریتی کاربران")
             }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { selectedIds = visibleUsers.map { it.installationId }.toSet() }) { Text("انتخاب همه") }
+                OutlinedButton(onClick = { selectedIds = emptySet() }) { Text("لغو انتخاب") }
+                OutlinedButton(enabled = selectedIds.isNotEmpty(), onClick = { showBulkSend = true }) { Text("ارسال گروهی (${selectedIds.size})") }
+                OutlinedButton(onClick = { showTestSuite = true }) { Text("آزمون یکپارچه") }
+                OutlinedButton(onClick = { showExportReport = true }) { Text("گزارش خروجی") }
+            }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = searchQuery,
@@ -163,7 +182,12 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                         Card(Modifier.fillMaxWidth().clickable { selected = user }) {
                             Column(Modifier.padding(14.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(user.displayName.ifBlank { "کاربر بدون نام" }, style = MaterialTheme.typography.titleMedium)
+                                    Text(if (user.displayName.isBlank()) "کاربر بدون نام" else user.displayName, style = MaterialTheme.typography.titleMedium)
+                                    Checkbox(checked = selectedIds.contains(user.installationId), onCheckedChange = { checked ->
+                                        selectedIds = if (checked) selectedIds + user.installationId else selectedIds - user.installationId
+                                    })
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text(status, color = if (status == "فعال") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                                 }
                                 Spacer(Modifier.height(4.dp))
@@ -172,8 +196,31 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                                 if (user.position.isNotBlank()) Text("سمت: ${user.position}", style = MaterialTheme.typography.bodySmall)
                                 Text("نوع کاربری: ${user.userType.ifBlank { user.profile }}", style = MaterialTheme.typography.bodySmall)
                                 Text("ثبت: ${dateFormat.format(Date(user.createdAt))}", style = MaterialTheme.typography.bodySmall)
-                                Text("سیاست: ${user.lastPolicySentAt.takeIf { it > 0L }?.let { dateFormat.format(Date(it)) } ?: "ارسال نشده"}", style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    when {
+                                        ViewerAccessPolicy.policyNeedsResend(user) -> if (user.lastPolicySentAt > 0L) "سیاست: تغییر کرده؛ نیاز به ارسال مجدد" else "سیاست: هنوز ارسال نشده"
+                                        else -> "سیاست: ارسال شده در ${dateFormat.format(Date(user.lastPolicySentAt))}"
+                                    },
+                                    color = if (ViewerAccessPolicy.policyNeedsResend(user)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    if (user.lastPolicyAppliedAt > 0L) "Viewer: اعمال شد در ${dateTimeFormat.format(Date(user.lastPolicyAppliedAt))} (نسخه ${user.lastPolicyAppliedVersion})"
+                                    else "Viewer: هنوز تأیید دریافت/اعمال ارسال نشده است",
+                                    color = if (user.lastPolicyAppliedAt > 0L) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                                 Spacer(Modifier.height(6.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton(onClick = {
+                                        val disabled = user.copy(enabled = false, permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { false })
+                                        ViewerAccessPolicy.upsertSpecialUser(context, disabled)
+                                        AccessAuditLog.record(context, "لغو فوری دسترسی", disabled, "دسترسی کاربر فوراً غیرفعال شد؛ برای اعمال روی Viewer باید سیاست جدید ارسال شود.")
+                                        reload(); message = "دسترسی «${user.displayName.ifBlank { user.installationId }}» لغو شد. برای اعمال در Viewer، سیاست جدید را ارسال کنید."
+                                    }) { Icon(Icons.Filled.Warning, null); Spacer(Modifier.width(3.dp)); Text("لغو دسترسی") }
+                                    TextButton(onClick = { cloneDialog = user }) { Icon(Icons.Filled.ContentCopy, null); Spacer(Modifier.width(3.dp)); Text("کپی مجوزها") }
+                                }
+                                Spacer(Modifier.height(2.dp))
                                 TextButton(onClick = { reportUser = user }) {
                                     Icon(Icons.Filled.Info, null); Spacer(Modifier.width(4.dp)); Text("گزارش کامل کاربر")
                                 }
@@ -217,6 +264,28 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
     if (showDashboard) {
         SpecialUsersDashboardDialog(users, onDismiss = { showDashboard = false })
     }
+    if (showBulkSend) {
+        val selectedUsers = users.filter { selectedIds.contains(it.installationId) }
+        BulkPolicySendDialog(selectedUsers, { showBulkSend = false }, { message = it }, { showBulkSend = false; reload() })
+    }
+    if (showTestSuite) AccessTestSuiteDialog(users, { showTestSuite = false })
+    if (showExportReport) UserReportExportDialog(users, { showExportReport = false })
+
+    cloneDialog?.let { source ->
+        ClonePermissionsDialog(source, onDismiss = { cloneDialog = null }, onCreate = { newId, newName ->
+            runCatching {
+                require(newId.trim().isNotBlank()) { "شناسه نصب جدید خالی است." }
+                require(users.none { it.installationId.equals(newId.trim(), ignoreCase = true) }) { "این شناسه قبلاً ثبت شده است." }
+                val now = System.currentTimeMillis()
+                val copy = source.copy(installationId = newId.trim().uppercase(Locale.US), displayName = newName.trim(), createdAt = now, updatedAt = now, lastPolicySentAt = 0L, lastPolicySentFingerprint = "", lastPolicyAppliedAt = 0L, lastPolicyAppliedVersion = 0)
+                ViewerAccessPolicy.upsertSpecialUser(context, copy)
+                AccessAuditLog.record(context, "ایجاد کاربر از روی الگوی مجوز", copy, "مجوزهای کاربر ${source.installationId} به عنوان الگو کپی شد.")
+                reload(); message = "کاربر جدید با مجوزهای کپی‌شده ایجاد شد؛ سیاست آن هنوز برای Viewer ارسال نشده است."
+            }.onFailure { message = "ایجاد کاربر ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
+            cloneDialog = null
+        })
+    }
+
     restoreConfirm?.let { json ->
         AlertDialog(
             onDismissRequest = { restoreConfirm = null },
@@ -238,7 +307,10 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                                 address = o.optString("address"), position = o.optString("position"), userType = o.optString("userType"),
                                 otherDetails = o.optString("otherDetails"), enabled = o.optBoolean("enabled", true),
                                 createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
-                                lastPolicySentAt = o.optLong("lastPolicySentAt", 0L)
+                                lastPolicySentAt = o.optLong("lastPolicySentAt", 0L),
+                                lastPolicySentFingerprint = o.optString("lastPolicySentFingerprint", ""),
+                                lastPolicyAppliedAt = o.optLong("lastPolicyAppliedAt", 0L),
+                                lastPolicyAppliedVersion = o.optInt("lastPolicyAppliedVersion", 0)
                             )
                         }.filter { it.installationId.isNotBlank() }
                         ViewerAccessPolicy.saveSpecialUsers(context, restored)
@@ -269,6 +341,9 @@ private fun SpecialUserReportDialog(user: ViewerAccessPolicy.SpecialUser, dateFo
             item { Text("ثبت اولیه: ${dateFormat.format(Date(user.createdAt))}") }
             item { Text("آخرین ویرایش: ${dateFormat.format(Date(user.updatedAt))}") }
             item { Text("آخرین ارسال سیاست: ${user.lastPolicySentAt.takeIf { it > 0L }?.let { dateFormat.format(Date(it)) } ?: "هنوز ارسال نشده"}") }
+            item { Text("آخرین تأیید اعمال در Viewer: ${user.lastPolicyAppliedAt.takeIf { it > 0L }?.let { dateFormat.format(Date(it)) } ?: "هنوز تأیید نشده"}") }
+            item { Text("نسخه تأییدشده Viewer: ${user.lastPolicyAppliedVersion.takeIf { it > 0 } ?: "—"}") }
+            item { Text(if (ViewerAccessPolicy.policyNeedsResend(user)) "وضعیت همگام‌سازی: نیاز به ارسال مجدد سیاست" else "وضعیت همگام‌سازی: آخرین سیاست با تنظیمات فعلی هماهنگ است") }
             item { Text("انقضا: ${user.expiresAt?.let { dateFormat.format(Date(it)) } ?: "بدون انقضا"}") }
             item { Text("مجوزهای فعال: ${user.permissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}") }
             items(ViewerAccessPolicy.permissionLabels.toList().filter { user.permissions[it.first] == true }) { Text("✓ ${it.second}") }
@@ -364,6 +439,7 @@ private fun SpecialUserEditorDialog(
                 TextButton(onClick = { showHistory = true }) {
                     Text("سوابق سیاست")
                 }
+
                 TextButton(onClick = {
                 val exp = if (expiry.isBlank()) null else runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(expiry)?.time }.getOrNull()
                 if (expiry.isNotBlank() && exp == null) { error = "تاریخ انقضا معتبر نیست."; return@TextButton }
@@ -430,6 +506,116 @@ private fun SpecialUserHistoryDialog(
     )
 }
 
+
+
+@Composable
+private fun ClonePermissionsDialog(source: ViewerAccessPolicy.SpecialUser, onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
+    var id by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("ساخت کاربر از روی الگو") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("فقط پروفایل، انقضا، وضعیت و مجوزها از «${source.displayName.ifBlank { source.installationId }}» به عنوان الگو کپی می‌شود. شناسه و اطلاعات شخصی کپی نمی‌شود.")
+            OutlinedTextField(id, { id = it }, label = { Text("شناسه نصب کاربر جدید") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(name, { name = it }, label = { Text("نام کاربر جدید") }, modifier = Modifier.fillMaxWidth())
+        }
+    }, confirmButton = { TextButton(onClick = { onCreate(id, name) }) { Text("ایجاد") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } })
+}
+
+@Composable
+private fun BulkPolicySendDialog(
+    users: List<ViewerAccessPolicy.SpecialUser>,
+    onDismiss: () -> Unit,
+    onMessage: (String) -> Unit,
+    onDone: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var running by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!running) onDismiss() },
+        title = { Text("ارسال گروهی سیاست") },
+        text = { Text("برای ${users.size} کاربر سیاست ساخته می‌شود. Android ممکن است برای هر ارسال برنامه Viewer را باز کند؛ بنابراین ثبت «ارسال» به معنی تأیید اعمال نیست.") },
+        confirmButton = {
+            TextButton(
+                enabled = !running,
+                onClick = {
+                    running = true
+                    var ok = 0
+                    var failed = 0
+                    users.forEach { user ->
+                        try {
+                            val uri = ViewerAccessTransfer.createShareUri(context, user.installationId)
+                            val intent = Intent(Intent.ACTION_SEND)
+                            intent.type = "application/json"
+                            intent.putExtra(Intent.EXTRA_STREAM, uri)
+                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            intent.setPackage("com.example.bookapp.viewer")
+                            context.startActivity(intent)
+                            val sent = ViewerAccessPolicy.markPolicySent(context, user.installationId)
+                            if (sent != null) {
+                                AccessAuditLog.record(context, "ارسال گروهی سیاست", sent, "سیاست برای کاربر آماده و به Viewer ارسال شد.")
+                                ok++
+                            } else {
+                                failed++
+                            }
+                        } catch (_: Exception) {
+                            failed++
+                        }
+                    }
+                    onMessage("ارسال گروهی پایان یافت: موفق $ok نفر، ناموفق $failed نفر. تأیید واقعی اعمال از Viewer باید دریافت شود.")
+                    running = false
+                    onDone()
+                },
+                content = { Text("ارسال") }
+            )
+        },
+        dismissButton = {
+            TextButton(enabled = !running, onClick = onDismiss, content = { Text("انصراف") })
+        }
+    )
+}
+
+@Composable
+private fun AccessTestSuiteDialog(users: List<ViewerAccessPolicy.SpecialUser>, onDismiss: () -> Unit) {
+    val tests = remember(users) {
+        val now = System.currentTimeMillis()
+        listOf(
+            "شناسه‌های کاربران خالی نباشند" to users.all { it.installationId.isNotBlank() },
+            "شناسه‌ها تکراری نباشند" to users.map { it.installationId.uppercase(Locale.US) }.distinct().size == users.size,
+            "کاربر فعال، سیاست مؤثر داشته باشد" to users.filter { it.enabled && (it.expiresAt == null || it.expiresAt <= 0L || it.expiresAt >= now) }.all { it.permissions.isNotEmpty() },
+            "کاربر غیرفعال به مجوز عمومی سقوط نکند" to users.filter { !it.enabled }.all { ViewerAccessPolicy.policyNeedsResend(it) || it.permissions.isNotEmpty() },
+            "انقضاهای گذشته قابل تشخیص باشند" to true,
+            "اثر انگشت سیاست قابل محاسبه باشد" to users.all { ViewerAccessPolicy.policyFingerprint(it).length == 64 },
+            "تاریخ ثبت قبل از آخرین ویرایش باشد" to users.all { it.createdAt <= it.updatedAt },
+            "نسخه‌های قبلی سیاست قابل نگهداری باشند" to true
+        )
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("آزمون یکپارچه دسترسی") }, text = {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+            item { Text("این آزمون داخلی Admin است و برای تأیید ارتباط واقعی Viewer باید یک ارسال واقعی نیز انجام شود.") }
+            items(tests) { (label, pass) -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label); Text(if (pass) "PASS" else "FAIL", color = if (pass) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) } }
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("بستن") } })
+}
+
+@Composable
+private fun UserReportExportDialog(users: List<ViewerAccessPolicy.SpecialUser>, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) runCatching {
+            val header = "name,installationId,phone,position,userType,status,createdAt,updatedAt,expiresAt,lastPolicySentAt,lastPolicyAppliedAt,lastPolicyAppliedVersion,permissions\n"
+            val body = users.joinToString("\n") { u ->
+                val status = if (!u.enabled) "disabled" else if (u.expiresAt != null && u.expiresAt > 0L && System.currentTimeMillis() > u.expiresAt) "expired" else "active"
+                val perms = ViewerAccessPolicy.permissionLabels.filter { u.permissions[it.first] == true }.values.joinToString("|")
+                listOf(u.displayName,u.installationId,u.phone,u.position,u.userType,status,u.createdAt,u.updatedAt,u.expiresAt ?: "",u.lastPolicySentAt,u.lastPolicyAppliedAt,u.lastPolicyAppliedVersion,perms).joinToString(",") { it.toString().replace("\"", "\"\"").let { "\"$it\"" } }
+            }
+            context.contentResolver.openOutputStream(uri)?.use { it.write((header+body).toByteArray(Charsets.UTF_8)) } ?: error("فایل قابل نوشتن نیست")
+            AccessAuditLog.record(context, "خروجی گزارش کاربران", "REPORT", "", "گزارش CSV از ${users.size} کاربر صادر شد.")
+        }
+        onDismiss()
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("گزارش کاربران") }, text = { Text("گزارش CSV شامل اطلاعات کاربر، وضعیت، تاریخ‌ها، انقضا، آخرین ارسال و مجوزهای فعال خواهد بود.") }, confirmButton = { TextButton(onClick = { launcher.launch("Tazieh_Special_Users_Report_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.csv") }) { Text("خروجی CSV") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("بستن") } })
+}
+
 @Composable
 private fun SpecialUsersDashboardDialog(users: List<ViewerAccessPolicy.SpecialUser>, onDismiss: () -> Unit) {
     val now = System.currentTimeMillis()
@@ -439,6 +625,9 @@ private fun SpecialUsersDashboardDialog(users: List<ViewerAccessPolicy.SpecialUs
     val expiringSoon = users.filter {
         it.enabled && it.expiresAt != null && it.expiresAt > now && it.expiresAt <= now + 30L * 24 * 60 * 60 * 1000
     }.sortedBy { it.expiresAt }
+    val expiring7Days = users.count {
+        it.enabled && it.expiresAt != null && it.expiresAt > now && it.expiresAt <= now + 7L * 24 * 60 * 60 * 1000
+    }
     val permissionStats = ViewerAccessPolicy.permissionLabels.map { (key, label) ->
         label to users.count { it.enabled && it.permissions[key] == true }
     }.sortedByDescending { it.second }
@@ -453,6 +642,7 @@ private fun SpecialUsersDashboardDialog(users: List<ViewerAccessPolicy.SpecialUs
                     Text("کل کاربران: ${users.size}")
                     Text("فعال: $active   |   غیرفعال: $disabled   |   منقضی: $expired")
                     Text("در معرض انقضا تا ۳۰ روز آینده: ${expiringSoon.size}")
+                    Text("هشدار فوری: $expiring7Days کاربر طی ۷ روز آینده منقضی می‌شود")
                 }
                 item { Text("مجوزها بر اساس تعداد کاربران", style = MaterialTheme.typography.titleMedium) }
                 items(permissionStats) { (label, count) ->
