@@ -677,7 +677,6 @@ fun ViewerAccessManagementScreen(
             confirmButton = { TextButton(onClick = { showAccessHistory = false }) { Text("بستن") } }
         )
     }
-}
 
     if (showComparePolicies && selectedUser != null) {
         val diffs = ViewerAccessPolicy.permissionLabels.keys.mapNotNull { key ->
@@ -738,6 +737,7 @@ fun ViewerAccessManagementScreen(
             dismissButton = { TextButton(onClick = { showSettingsImportConfirm = false; pendingSettingsJson = null }) { Text("انصراف") } }
         )
     }
+}
 
 private fun profileTitle(profile: String) = when (profile) {
     ViewerAccessPolicy.PROFILE_PUBLIC -> "عمومی"
