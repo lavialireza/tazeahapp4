@@ -351,10 +351,10 @@ fun SettingsScreen(
                                     }
                                     downloadingAppUpdate = false
                                     downloadResult.onSuccess {
-                                        com.example.bookapp.data.UpdateHistoryStore.record(context, installed.buildNumber, info.buildNumber, true, "درخواست نصب با موفقیت انجام شد")
+                                        com.example.bookapp.data.UpdateHistoryStore.record(context, com.example.bookapp.data.UpdateHelper.getInstalledVersion(context).buildNumber, info.buildNumber, true, "درخواست نصب با موفقیت انجام شد")
                                     }
                                     downloadResult.onFailure { error ->
-                                        com.example.bookapp.data.UpdateHistoryStore.record(context, installed.buildNumber, info.buildNumber, false, error.message ?: "دریافت/نصب ناموفق")
+                                        com.example.bookapp.data.UpdateHistoryStore.record(context, com.example.bookapp.data.UpdateHelper.getInstalledVersion(context).buildNumber, info.buildNumber, false, error.message ?: "دریافت/نصب ناموفق")
                                         appUpdateMessage = error.message ?: "دریافت بروزرسانی ناموفق بود."
                                     }
                                 }
