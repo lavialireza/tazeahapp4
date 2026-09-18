@@ -53,6 +53,8 @@ object UpdateHelper {
                 instanceFollowRedirects = true
                 setRequestProperty("Accept", "application/vnd.github+json")
                 setRequestProperty("User-Agent", "Tazieh-Android-Updater")
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Pragma", "no-cache")
             }
             try {
                 if (connection.responseCode !in 200..299) {
@@ -72,8 +74,11 @@ object UpdateHelper {
                     if (release.optBoolean("draft", false)) continue
 
                     val tag = release.optString("tag_name")
+                    val releaseName = release.optString("name")
                     val buildNumber = Regex("^apk-build-(\\d+)$").find(tag)
                         ?.groupValues?.get(1)?.toIntOrNull()
+                        ?: Regex("(?:build|versionCode)[^0-9]*(\\d+)", RegexOption.IGNORE_CASE).find(releaseName)
+                            ?.groupValues?.get(1)?.toIntOrNull()
                         ?: release.optInt("versionCode", 0).takeIf { it > 0 }
                         ?: continue
 
