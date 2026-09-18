@@ -90,7 +90,13 @@ private fun PermissionGroupEditor(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp)) {
                     Row(
-                        Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                        Modifier.fillMaxWidth().clickable {
+                            expandedGroups = if (group.title in expandedGroups) {
+                                expandedGroups - group.title
+                            } else {
+                                expandedGroups + group.title
+                            }
+                        },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -169,7 +175,7 @@ fun ViewerAccessManagementScreen(
     var pendingBulkForUser by remember { mutableStateOf(false) }
     var lastPublicChangeAt by remember { mutableStateOf(0L) }
     val publicDirty = publicPermissions != savedPublicPermissions
-    val userDirty = selectedUser != null && customPermissions != (savedUserPermissions ?: selectedUser?.permissions ?: emptyMap())
+    val userDirty = selectedUser != null && customPermissions != (savedUserPermissions ?: selectedUser!!.permissions)
     fun requestPermissionChange(key: String, value: Boolean, forUser: Boolean) {
         if (!value && key in sensitivePermissionKeys) {
             pendingPermissionChange = key to value
