@@ -273,6 +273,7 @@ fun AppNavigation(
                 onDialogueResultClick = { d -> navController.navigate("dialogue_reader/${d.dialogueId}") },
                 isBookmarked = { id -> id in bookmarkedIds },
                 showBookmarks = featureEnabled("bookmarks"),
+                advancedEnabled = featureEnabled("advancedSearch"),
                 onToggleBookmark = { id ->
                     if (featureEnabled("bookmarks")) {
                         Prefs.toggleBookmark(context, id)
@@ -945,6 +946,7 @@ fun AppNavigation(
                 },
                 onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId") },
                 showGallery = featureEnabled("gallery"),
+                showPdf = featureEnabled("pdf"),
                 onRename = { item, newTitle ->
                     scope.launch {
                         db.roleDao().updateTitle(item.roleId, newTitle)
@@ -1127,7 +1129,7 @@ fun AppNavigation(
             }
         }
 
-        composable(ROUTE_TAZIEH_GALLERY) { backStackEntry ->
+        if (featureEnabled("gallery")) composable(ROUTE_TAZIEH_GALLERY) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             var taziehTitle by remember { mutableStateOf("تعزیه") }
             var images by remember { mutableStateOf(listOf<TaziehImageItem>()) }
@@ -1230,19 +1232,27 @@ fun AppNavigation(
                     navController.navigate("text_pager/$roleId/$index")
                 },
                 onBack = { navController.popBackStack() },
-                topBarAction = {
-                    TextButton(
-                        onClick = { taziehIdForCompare?.let { navController.navigate("compare/$it") } },
-                        enabled = taziehIdForCompare != null
-                    ) { Text("مقایسه") }
-                },
+                topBarAction = if (featureEnabled("compare")) {
+                    {
+                        TextButton(
+                            onClick = { taziehIdForCompare?.let { navController.navigate("compare/$it") } },
+                            enabled = taziehIdForCompare != null
+                        ) { Text("مقایسه") }
+                    }
+                } else null,
                 floatingAction = {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
-                        androidx.compose.material3.ExtendedFloatingActionButton(
-                            text = { androidx.compose.material3.Text("حالت تمرین") },
-                            icon = { androidx.compose.material3.Icon(Icons.Filled.School, contentDescription = null) },
-                            onClick = { navController.navigate("rehearsal/$roleId/$roleTitle") }
-                        )
+                        if (featureEnabled("training")) {
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                text = { androidx.compose.material3.Text("حالت تمرین") },
+                                icon = { androidx.compose.material3.Icon(Icons.Filled.School, contentDescription = null) },
+                                onClick = {
+                                    if (featureEnabled("training")) {
+                                        navController.navigate("rehearsal/$roleId/$roleTitle")
+                                    }
+                                }
+                            )
+                        }
                         if (featureEnabled("pdf")) {
                             Spacer(Modifier.height(10.dp))
                             androidx.compose.material3.ExtendedFloatingActionButton(
