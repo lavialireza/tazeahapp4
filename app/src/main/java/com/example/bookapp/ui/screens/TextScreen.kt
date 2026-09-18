@@ -989,7 +989,6 @@ fun TextPagerScreen(
                 canTts = canTts,
                 canCopy = canCopy,
                 canShare = canShare,
-                canNavigate = canNavigate,
                 fieldTitle = fieldTitle,
                 taziehTitle = taziehTitle,
                 roleTitle = roleTitle,
