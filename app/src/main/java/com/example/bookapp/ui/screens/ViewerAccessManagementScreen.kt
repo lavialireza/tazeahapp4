@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.bookapp.data.ViewerAccessPolicy
 import com.example.bookapp.data.ViewerAccessTransfer
 import com.example.bookapp.data.AccessAuditLog
@@ -240,6 +241,10 @@ fun ViewerAccessManagementScreen(
     var showPermissionPreview by remember { mutableStateOf(false) }
     var showAccessHistory by remember { mutableStateOf(false) }
     var qaResult by remember { mutableStateOf<PermissionQa.Result?>(null) }
+    var showComparePolicies by remember { mutableStateOf(false) }
+    var showSettingsImportConfirm by remember { mutableStateOf(false) }
+    var pendingSettingsJson by remember { mutableStateOf<String?>(null) }
+    var showDraftTest by remember { mutableStateOf(false) }
     val publicDirty = publicPermissions != savedPublicPermissions
     val userDirty = selectedUser != null && customPermissions != (savedUserPermissions ?: selectedUser!!.permissions)
     fun requestPermissionChange(key: String, value: Boolean, forUser: Boolean) {
@@ -273,6 +278,20 @@ fun ViewerAccessManagementScreen(
                 .onFailure { message = "خروجی سیاست ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
         }
     }
+    val settingsExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(ViewerAccessPolicy.exportSettingsJson(context).toByteArray(Charsets.UTF_8)) }
+                ?: error("فایل خروجی باز نشد.")
+        }.onSuccess { message = "پشتیبان کامل تنظیمات دسترسی ذخیره شد." }
+         .onFailure { message = "خروجی تنظیمات ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
+    }
+    val settingsImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: error("فایل خوانده نشد.")
+        }.onSuccess { pendingSettingsJson = it; showSettingsImportConfirm = true }
+         .onFailure { message = "خواندن تنظیمات ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
+    }
+
     fun sendDirectlyToViewer(target: String) {
         fun markSentIfSpecial() {
             val normalized = target.trim().uppercase(Locale.US)
@@ -292,6 +311,13 @@ fun ViewerAccessManagementScreen(
             }
             context.startActivity(intent)
             markSentIfSpecial()
+            val version = ViewerAccessPolicy.getPolicyVersion(context, target)
+            context.sendBroadcast(Intent("com.example.bookapp.POLICY_CHANGED").apply {
+                setPackage("com.example.bookapp.viewer")
+                putExtra("targetInstallationId", target.trim().uppercase(Locale.US))
+                putExtra("policyVersion", version)
+            })
+            message = "سیاست نسخه $version ارسال شد؛ Viewer برای اطلاع از تغییر سیاست به‌روزرسانی شد و تأیید اعمال جداگانه دریافت می‌شود."
         }.onFailure {
             // اگر Viewer نصب نیست، همان فایل را از طریق Share Sheet در اختیار کاربر می‌گذاریم.
             runCatching {
@@ -411,24 +437,20 @@ fun ViewerAccessManagementScreen(
                         Spacer(Modifier.height(6.dp))
                         Text("پروفایل آماده", style = MaterialTheme.typography.titleSmall)
                         Text("با انتخاب یک پروفایل، مجوزهای پیشنهادی آن اعمال می‌شود و در صورت نیاز قابل سفارشی‌سازی است.", style = MaterialTheme.typography.bodySmall)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(
-                                ViewerAccessPolicy.PROFILE_PUBLIC to "عمومی",
-                                ViewerAccessPolicy.PROFILE_RESEARCHER to "پژوهشگر",
-                                ViewerAccessPolicy.PROFILE_DIRECTOR to "کارگردان",
-                                ViewerAccessPolicy.PROFILE_ACTOR to "بازیگر"
-                            ).forEach { (value, label) ->
-                                FilterChip(selected = profile == value, onClick = { profile = value; customPermissions = ViewerAccessPolicy.profileDefaults(value) }, label = { Text(label) })
-                            }
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(
-                                ViewerAccessPolicy.PROFILE_READER to "خواننده",
-                                ViewerAccessPolicy.PROFILE_TRAINING to "تمرینی",
-                                ViewerAccessPolicy.PROFILE_COLLABORATOR to "همکار",
-                                ViewerAccessPolicy.PROFILE_CUSTOM to "سفارشی"
-                            ).forEach { (value, label) ->
-                                FilterChip(selected = profile == value, onClick = { profile = value; customPermissions = ViewerAccessPolicy.profileDefaults(value) }, label = { Text(label) })
+                        val profileRows = listOf(
+                            listOf(ViewerAccessPolicy.PROFILE_PUBLIC to "عمومی", ViewerAccessPolicy.PROFILE_RESEARCHER to "پژوهشگر", ViewerAccessPolicy.PROFILE_DIRECTOR to "کارگردان", ViewerAccessPolicy.PROFILE_ACTOR to "بازیگر"),
+                            listOf(ViewerAccessPolicy.PROFILE_READER to "خواننده", ViewerAccessPolicy.PROFILE_TRAINING to "تمرینی", ViewerAccessPolicy.PROFILE_COLLABORATOR to "همکار", ViewerAccessPolicy.PROFILE_CUSTOM to "سفارشی")
+                        )
+                        profileRows.forEach { rowProfiles ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                rowProfiles.forEach { (value, label) ->
+                                    FilterChip(
+                                        selected = profile == value,
+                                        onClick = { profile = value; customPermissions = ViewerAccessPolicy.profileDefaults(value) },
+                                        label = { Text(label, fontSize = 10.sp, maxLines = 1) },
+                                        modifier = Modifier.weight(1f).height(32.dp)
+                                    )
+                                }
                             }
                         }
                         OutlinedTextField(expiryText, { expiryText = it }, label = { Text("انقضا (YYYY-MM-DD، خالی = بدون انقضا)") }, modifier = Modifier.fillMaxWidth())
@@ -556,10 +578,21 @@ fun ViewerAccessManagementScreen(
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("ابزارهای کنترل دسترسی", style = MaterialTheme.typography.titleMedium)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(onClick = { showPermissionPreview = true }, Modifier.weight(1f)) { Text("پیش‌نمایش دسترسی") }
-                            OutlinedButton(onClick = { showAccessHistory = true }, Modifier.weight(1f)) { Text("تاریخچه تغییرات") }
+                            OutlinedButton(onClick = { showPermissionPreview = true }, Modifier.weight(1f)) { Text("پیش‌نمایش") }
+                            OutlinedButton(enabled = selectedUser != null, onClick = { showComparePolicies = true }, Modifier.weight(1f)) { Text("مقایسه سیاست") }
                         }
-                        OutlinedButton(onClick = { qaResult = PermissionQa.run(context) }, Modifier.fillMaxWidth()) { Text("اجرای آزمون خودکار ۶۵ مجوز") }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { showDraftTest = true }, Modifier.weight(1f)) { Text("آزمون پیش از اعمال") }
+                            OutlinedButton(onClick = { settingsExportLauncher.launch("tazieh-access-settings.json") }, Modifier.weight(1f)) { Text("خروجی تنظیمات") }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { settingsImportLauncher.launch(arrayOf("application/json", "text/*")) }, Modifier.weight(1f)) { Text("ورود تنظیمات") }
+                            OutlinedButton(onClick = { permissionSearch = "" }, Modifier.weight(1f)) { Text("پاک‌کردن جستجو") }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { showAccessHistory = true }, Modifier.weight(1f)) { Text("تاریخچه تغییرات") }
+                            OutlinedButton(onClick = { qaResult = PermissionQa.run(context) }, Modifier.weight(1f)) { Text("آزمون ۶۵ مجوز") }
+                        }
                         qaResult?.let { r ->
                             Text(if (r.failed == 0) "✓ آزمون موفق: ${r.passed} بررسی بدون خطا" else "⚠ ${r.failed} مورد نیازمند بررسی؛ ${r.passed} بررسی موفق", color = if (r.failed == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                             if (r.failures.isNotEmpty()) r.failures.take(8).forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
@@ -645,6 +678,66 @@ fun ViewerAccessManagementScreen(
         )
     }
 }
+
+    if (showComparePolicies && selectedUser != null) {
+        val diffs = ViewerAccessPolicy.permissionLabels.keys.mapNotNull { key ->
+            val publicValue = publicPermissions[key] == true
+            val userValue = customPermissions[key] == true
+            if (publicValue != userValue) ViewerAccessPolicy.permissionLabels[key] to Pair(publicValue, userValue) else null
+        }
+        AlertDialog(
+            onDismissRequest = { showComparePolicies = false },
+            title = { Text("مقایسه سیاست عمومی و کاربر") },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    item { Text("تفاوت‌ها: ${diffs.size} مورد", style = MaterialTheme.typography.titleSmall) }
+                    if (diffs.isEmpty()) item { Text("هیچ تفاوتی در مجوزهای این پیش‌نویس وجود ندارد.") }
+                    items(diffs) { (label, values) ->
+                        Text("$label: عمومی ${if (values.first) "روشن" else "خاموش"} / کاربر ${if (values.second) "روشن" else "خاموش"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showComparePolicies = false }) { Text("بستن") } }
+        )
+    }
+
+    if (showDraftTest) {
+        val draft = if (selectedUser != null) customPermissions else publicPermissions
+        val effective = ViewerAccessPolicy.normalizedPermissions(draft)
+        val inactiveChildren = ViewerAccessPolicy.permissionParents.count { (child, parent) -> effective[child] == true && effective[parent] != true }
+        AlertDialog(
+            onDismissRequest = { showDraftTest = false },
+            title = { Text("آزمون پیش از اعمال") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("این آزمون هیچ تغییری را ذخیره نمی‌کند.")
+                    Text("مجوزهای روشن: ${effective.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}")
+                    Text(if (inactiveChildren == 0) "✓ رابطه والد/فرزند بدون تناقض است." else "⚠ $inactiveChildren فرزند به‌دلیل خاموش بودن والد مؤثر نیست.")
+                    Text("پس از ذخیره، برای اعمال روی Viewer باید سیاست ارسال شود.")
+                }
+            },
+            confirmButton = { TextButton(onClick = { qaResult = PermissionQa.run(context); showDraftTest = false }) { Text("آزمون کامل") } },
+            dismissButton = { TextButton(onClick = { showDraftTest = false }) { Text("بستن") } }
+        )
+    }
+
+    if (showSettingsImportConfirm && pendingSettingsJson != null) {
+        AlertDialog(
+            onDismissRequest = { showSettingsImportConfirm = false; pendingSettingsJson = null },
+            icon = { Icon(Icons.Filled.Warning, contentDescription = null) },
+            title = { Text("جایگزینی تنظیمات دسترسی") },
+            text = { Text("پروفایل عمومی و فهرست کاربران خاص موجود با اطلاعات این فایل جایگزین می‌شوند. ادامه می‌دهید؟") },
+            confirmButton = {
+                TextButton(onClick = {
+                    ViewerAccessPolicy.importSettingsJson(context, pendingSettingsJson!!)
+                        .onSuccess { message = it; publicPermissions = ViewerAccessPolicy.getPublicPermissions(context); specialUsers = ViewerAccessPolicy.getSpecialUsers(context); savedPublicPermissions = publicPermissions }
+                        .onFailure { message = "ورود تنظیمات ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
+                    showSettingsImportConfirm = false; pendingSettingsJson = null
+                }) { Text("تأیید") }
+            },
+            dismissButton = { TextButton(onClick = { showSettingsImportConfirm = false; pendingSettingsJson = null }) { Text("انصراف") } }
+        )
+    }
 
 private fun profileTitle(profile: String) = when (profile) {
     ViewerAccessPolicy.PROFILE_PUBLIC -> "عمومی"

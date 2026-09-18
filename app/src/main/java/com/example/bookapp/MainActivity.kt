@@ -87,6 +87,15 @@ class MainActivity : ComponentActivity() {
             runCatching { migratePrefsUserDataToRoom(this@MainActivity, AppDatabase.getInstance(this@MainActivity)) }
         }
 
+        if (BuildConfig.PUBLIC_VIEWER) {
+            val noticePrefs = getSharedPreferences("viewer_access_policy", MODE_PRIVATE)
+            if (noticePrefs.getBoolean("pending_policy_change_notice", false)) {
+                val version = noticePrefs.getInt("pending_policy_change_version", 0)
+                android.widget.Toast.makeText(this, "تغییر سیاست دسترسی دریافت شد${if (version > 0) " — نسخه $version" else ""}. برای اعمال، فایل سیاست را از Admin دریافت کنید.", android.widget.Toast.LENGTH_LONG).show()
+                noticePrefs.edit().remove("pending_policy_change_notice").remove("pending_policy_change_target").remove("pending_policy_change_version").apply()
+            }
+        }
+
         setContent {
             var autoDarkMode by remember { mutableStateOf(Prefs.getAutoDarkMode(this)) }
             var darkMode by remember {

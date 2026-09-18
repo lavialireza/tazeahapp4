@@ -562,13 +562,38 @@ object ViewerAccessPolicy {
         return id
     }
 
+    /** خروجی کامل تنظیمات مدیریت دسترسی برای پشتیبان/انتقال Admin. */
+    fun exportSettingsJson(context: Context): String = toJson(context)
+
+    /** وارد کردن کامل تنظیمات مدیریت دسترسی Admin با تأیید ساختار و جلوگیری از شناسه‌های تکراری. */
+    fun importSettingsJson(context: Context, text: String): Result<String> = runCatching {
+        val root = JSONObject(text)
+        require(root.optInt("schema", -1) == 1) { "نسخه فایل تنظیمات پشتیبانی نمی‌شود." }
+        val pub = root.optJSONObject("public") ?: JSONObject()
+        val publicMap = permissionLabels.keys.associateWith { key -> pub.optBoolean(key, false) }
+        val arr = root.optJSONArray("specialUsers") ?: JSONArray()
+        val users = mutableListOf<SpecialUser>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            users += jsonToSpecialUser(o)
+        }
+        require(users.map { it.installationId }.distinct().size == users.size) { "در فایل، شناسه نصب تکراری وجود دارد." }
+        setPublicPermissions(context, publicMap)
+        saveSpecialUsers(context, users, bumpVersion = false)
+        val importedVersion = root.optInt("policyVersion", 0)
+        if (importedVersion > getPolicyVersion(context)) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt(KEY_POLICY_VERSION, importedVersion).commit()
+        }
+        check(getSpecialUsers(context).size == users.size) { "بازیابی کاربران خاص کامل نشد." }
+        "تنظیمات دسترسی با موفقیت وارد و جایگزین شد."
+    }
+
     fun toJson(context: Context): String {
         val root = JSONObject().put("schema", 1).put("policyVersion", getPolicyVersion(context))
         val pub = JSONObject(); getPublicPermissions(context).forEach { (k,v) -> pub.put(k,v) }; root.put("public", pub)
         val arr = JSONArray(); getSpecialUsers(context).forEach { u ->
-            val o = JSONObject().put("installationId", u.installationId).put("profile", u.profile)
-            if (u.expiresAt == null) o.put("expiresAt", JSONObject.NULL) else o.put("expiresAt", u.expiresAt)
-            val p = JSONObject(); u.permissions.forEach { (k,v) -> p.put(k,v) }; o.put("permissions",p); arr.put(o)
+            arr.put(specialUserToJson(u))
         }; root.put("specialUsers", arr)
         return root.toString(2)
     }
