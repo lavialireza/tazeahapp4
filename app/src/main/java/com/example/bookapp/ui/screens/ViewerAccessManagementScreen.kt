@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Warning
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,14 +61,21 @@ private fun permissionDescription(key: String): String = when (key) {
     else -> ""
 }
 
+private val sensitivePermissionKeys = setOf("copy", "share", "pdf", "gallery", "training")
+
+private fun accessDateTime(value: Long): String =
+    if (value <= 0L) "ثبت نشده"
+    else SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(value))
+
 @Composable
 private fun PermissionGroupEditor(
     permissions: Map<String, Boolean>,
     onChange: (String, Boolean) -> Unit,
+    onBulkChange: (List<String>, Boolean) -> Unit,
     searchQuery: String,
     compact: Boolean = false
 ) {
-    var expanded by remember { mutableStateOf(!compact) }
+    var expandedGroups by remember { mutableStateOf(if (compact) emptySet<String>() else accessPermissionGroups.map { it.title }.toSet()) }
     val labels = ViewerAccessPolicy.permissionLabels
     val visible = accessPermissionGroups.mapNotNull { group ->
         val items = group.keys.mapNotNull { key -> labels[key]?.let { key to it } }
@@ -93,23 +101,19 @@ private fun PermissionGroupEditor(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        Text(if (expanded) "▲" else "▼")
+                        Text(if (group.title in expandedGroups) "▲" else "▼")
                     }
-                    if (expanded) {
+                    if (group.title in expandedGroups) {
                         Spacer(Modifier.height(6.dp))
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             TextButton(onClick = {
-                                group.keys.forEach { key ->
-                                    if (labels.containsKey(key)) onChange(key, true)
-                                }
+                                onBulkChange(group.keys.filter { labels.containsKey(it) }, true)
                             }) { Text("فعال کردن همه") }
                             TextButton(onClick = {
-                                group.keys.forEach { key ->
-                                    if (labels.containsKey(key)) onChange(key, false)
-                                }
+                                onBulkChange(group.keys.filter { labels.containsKey(it) }, false)
                             }) { Text("غیرفعال کردن همه") }
                         }
                         items.forEach { (key, label) ->
@@ -156,6 +160,40 @@ fun ViewerAccessManagementScreen(
     var accessTestMessage by remember { mutableStateOf<String?>(null) }
     var exportTarget by remember { mutableStateOf("*") }
     var permissionSearch by remember { mutableStateOf("") }
+    var savedPublicPermissions by remember { mutableStateOf(publicPermissions) }
+    var savedUserPermissions by remember { mutableStateOf<Map<String, Boolean>?>(null) }
+    var pendingPermissionChange by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var pendingPermissionContext by remember { mutableStateOf("") }
+    var pendingPermissionForUser by remember { mutableStateOf(false) }
+    var pendingBulkChange by remember { mutableStateOf<Pair<List<String>, Boolean>?>(null) }
+    var pendingBulkForUser by remember { mutableStateOf(false) }
+    var lastPublicChangeAt by remember { mutableStateOf(0L) }
+    val publicDirty = publicPermissions != savedPublicPermissions
+    val userDirty = selectedUser != null && customPermissions != (savedUserPermissions ?: selectedUser?.permissions ?: emptyMap())
+    fun requestPermissionChange(key: String, value: Boolean, forUser: Boolean) {
+        if (!value && key in sensitivePermissionKeys) {
+            pendingPermissionChange = key to value
+            pendingPermissionContext = ViewerAccessPolicy.permissionLabels[key] ?: key
+            pendingPermissionForUser = forUser
+        } else if (forUser) {
+            customPermissions = customPermissions + (key to value)
+        } else {
+            publicPermissions = publicPermissions + (key to value)
+        }
+    }
+    fun requestBulkChange(keys: List<String>, value: Boolean, forUser: Boolean) {
+        if (keys.isEmpty()) return
+        if (!value && keys.any { it in sensitivePermissionKeys }) {
+            pendingBulkChange = keys to value
+            pendingBulkForUser = forUser
+            pendingPermissionContext = keys.mapNotNull { ViewerAccessPolicy.permissionLabels[it] }.joinToString("، ")
+        } else {
+            val target = if (forUser) customPermissions else publicPermissions
+            val updated = target.toMutableMap()
+            keys.forEach { updated[it] = value }
+            if (forUser) customPermissions = updated else publicPermissions = updated
+        }
+    }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.openOutputStream(uri)?.let { ViewerAccessTransfer.writePolicy(context, exportTarget, it) } ?: error("فایل خروجی باز نشد.") }
@@ -164,6 +202,14 @@ fun ViewerAccessManagementScreen(
         }
     }
     fun sendDirectlyToViewer(target: String) {
+        fun markSentIfSpecial() {
+            val normalized = target.trim().uppercase(Locale.US)
+            if (normalized.isNotBlank() && normalized != "*") {
+                val version = ViewerAccessPolicy.getPolicyVersion(context, normalized)
+                ViewerAccessPolicy.markPolicySent(context, normalized, version)
+                specialUsers = ViewerAccessPolicy.getSpecialUsers(context)
+            }
+        }
         runCatching {
             val uri = ViewerAccessTransfer.createShareUri(context, target)
             val intent = Intent(Intent.ACTION_SEND).apply {
@@ -173,6 +219,7 @@ fun ViewerAccessManagementScreen(
                 setPackage("com.example.bookapp.viewer")
             }
             context.startActivity(intent)
+            markSentIfSpecial()
         }.onFailure {
             // اگر Viewer نصب نیست، همان فایل را از طریق Share Sheet در اختیار کاربر می‌گذاریم.
             runCatching {
@@ -196,9 +243,48 @@ fun ViewerAccessManagementScreen(
         profile = user.profile
         expiryText = user.expiresAt?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it)) } ?: ""
         customPermissions = user.permissions
+        savedUserPermissions = user.permissions
     }
     fun resetEditor() {
-        selectedUser = null; installationId = ""; displayName = ""; details = ""; enabled = true; profile = ViewerAccessPolicy.PROFILE_CUSTOM; expiryText = ""; customPermissions = ViewerAccessPolicy.profileDefaults(ViewerAccessPolicy.PROFILE_CUSTOM)
+        selectedUser = null; installationId = ""; displayName = ""; details = ""; enabled = true; profile = ViewerAccessPolicy.PROFILE_CUSTOM; expiryText = ""; customPermissions = ViewerAccessPolicy.profileDefaults(ViewerAccessPolicy.PROFILE_CUSTOM); savedUserPermissions = null
+    }
+
+    pendingPermissionChange?.let { (key, value) ->
+        AlertDialog(
+            onDismissRequest = { pendingPermissionChange = null; pendingPermissionForUser = false },
+            icon = { Icon(Icons.Filled.Warning, contentDescription = null) },
+            title = { Text("تغییر دسترسی حساس") },
+            text = { Text("آیا مطمئن هستید دسترسی «$pendingPermissionContext» غیرفعال شود؟ پس از ذخیره و همگام‌سازی، Viewer دیگر این قابلیت را نخواهد داشت.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (pendingPermissionForUser) customPermissions = customPermissions + (key to value)
+                    else publicPermissions = publicPermissions + (key to value)
+                    pendingPermissionChange = null
+                    pendingPermissionForUser = false
+                }) { Text("تأیید") }
+            },
+            dismissButton = { TextButton(onClick = { pendingPermissionChange = null }) { Text("انصراف") } }
+        )
+    }
+
+    pendingBulkChange?.let { (keys, value) ->
+        AlertDialog(
+            onDismissRequest = { pendingBulkChange = null; pendingBulkForUser = false },
+            icon = { Icon(Icons.Filled.Warning, contentDescription = null) },
+            title = { Text("تغییر گروهی دسترسی‌ها") },
+            text = { Text("آیا مطمئن هستید ${if (value) "همه" else "دسترسی‌های انتخاب‌شده در گروه"} اعمال شود؟ این تغییر شامل قابلیت‌های حساس نیز می‌شود: $pendingPermissionContext") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = if (pendingBulkForUser) customPermissions else publicPermissions
+                    val updated = target.toMutableMap()
+                    keys.forEach { updated[it] = value }
+                    if (pendingBulkForUser) customPermissions = updated else publicPermissions = updated
+                    pendingBulkChange = null
+                    pendingBulkForUser = false
+                }) { Text("تأیید") }
+            },
+            dismissButton = { TextButton(onClick = { pendingBulkChange = null; pendingBulkForUser = false }) { Text("انصراف") } }
+        )
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("مدیریت دسترسی Viewer") }, navigationIcon = { TextButton(onClick = onBack) { Text("بازگشت") } }) }) { pad ->
@@ -219,13 +305,19 @@ fun ViewerAccessManagementScreen(
                         Spacer(Modifier.height(6.dp))
                         PermissionGroupEditor(
                             permissions = publicPermissions,
-                            onChange = { key, value -> publicPermissions = publicPermissions + (key to value) },
+                            onChange = { key, value -> requestPermissionChange(key, value, false) },
+                            onBulkChange = { keys, value -> requestBulkChange(keys, value, false) },
                             searchQuery = permissionSearch
                         )
-                        Button(onClick = { ViewerAccessPolicy.setPublicPermissions(context, publicPermissions); message = "پروفایل عمومی ذخیره شد." }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(6.dp)); Text("ذخیره پروفایل عمومی") }
+                        Button(onClick = { ViewerAccessPolicy.setPublicPermissions(context, publicPermissions); savedPublicPermissions = publicPermissions; lastPublicChangeAt = System.currentTimeMillis(); message = "پروفایل عمومی ذخیره شد و آماده ارسال است." }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(6.dp)); Text("ذخیره پروفایل عمومی") }
+                        if (publicDirty) {
+                            Text("تغییرات ذخیره‌نشده: ${publicPermissions.keys.count { publicPermissions[it] != savedPublicPermissions[it] }} مورد", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        Text("آخرین تغییر این صفحه: ${if (lastPublicChangeAt > 0L) accessDateTime(lastPublicChangeAt) else "ثبت نشده"}", style = MaterialTheme.typography.bodySmall)
                         OutlinedButton(onClick = { exportTarget = "*"; exportLauncher.launch("viewer-access-public.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست عمومی برای Viewer") }
                         Button(onClick = { sendDirectlyToViewer("*") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(6.dp)); Text("ارسال مستقیم به Viewer") }
                         Text("نسخه سیاست: ${ViewerAccessPolicy.getPolicyVersion(context)}", style = MaterialTheme.typography.bodySmall)
+                        Text(if (publicDirty) "وضعیت: ⚠ تغییرات ذخیره‌نشده" else "وضعیت: ✓ تنظیمات ذخیره‌شده", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -256,7 +348,8 @@ fun ViewerAccessManagementScreen(
                             Text("مجوزهای اختصاصی", style = MaterialTheme.typography.titleSmall)
                             PermissionGroupEditor(
                                 permissions = customPermissions,
-                                onChange = { key, value -> customPermissions = customPermissions + (key to value) },
+                                onChange = { key, value -> requestPermissionChange(key, value, true) },
+                                onBulkChange = { keys, value -> requestBulkChange(keys, value, true) },
                                 searchQuery = permissionSearch,
                                 compact = true
                             )
@@ -267,6 +360,18 @@ fun ViewerAccessManagementScreen(
                                 "خلاصه مجوزها: ${customPermissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size} قابلیت فعال",
                                 style = MaterialTheme.typography.bodySmall
                             )
+                            if (userDirty) Text("⚠ تغییرات مجوز ذخیره نشده است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        selectedUser?.let { u ->
+                            Spacer(Modifier.height(4.dp))
+                            Text("آخرین تغییر: ${accessDateTime(u.updatedAt)}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                if (ViewerAccessPolicy.policyNeedsResend(u)) "وضعیت سیاست: ⚠ نیاز به همگام‌سازی"
+                                else if (u.lastPolicyAppliedAt > 0L && u.lastPolicyAppliedVersion == u.lastPolicySentVersion) "وضعیت سیاست: ✓ همگام"
+                                else "وضعیت سیاست: ارسال شده، در انتظار تأیید Viewer",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text("آخرین ارسال: ${accessDateTime(u.lastPolicySentAt)} | آخرین اعمال: ${accessDateTime(u.lastPolicyAppliedAt)}", style = MaterialTheme.typography.bodySmall)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = {
@@ -299,6 +404,7 @@ fun ViewerAccessManagementScreen(
                                     // فرم را پاک نمی‌کنیم تا کاربر بلافاصله اطلاعات ذخیره‌شده را ببیند
                                     // و بتواند در صورت نیاز همان رکورد را دوباره ویرایش کند.
                                     selectedUser = reloaded.firstOrNull { it.installationId.equals(normalizedId, ignoreCase = true) }
+                                    savedUserPermissions = customPermissions
                                     installationId = normalizedId
                                     message = "کاربر خاص «$normalizedId» واقعاً در حافظه برنامه ذخیره و بازیابی شد."
                                 }.onFailure { e ->
@@ -336,6 +442,22 @@ fun ViewerAccessManagementScreen(
                             Spacer(Modifier.height(8.dp))
                             OutlinedButton(onClick = { exportTarget = installationId.trim(); exportLauncher.launch("viewer-access-${installationId.trim()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست این Viewer") }
                             Button(onClick = { sendDirectlyToViewer(installationId.trim()) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(6.dp)); Text("ارسال مستقیم به همین Viewer") }
+                            if (userDirty) {
+                                OutlinedButton(onClick = {
+                                    val id = installationId.trim().uppercase(Locale.US)
+                                    val current = specialUsers.firstOrNull { it.installationId.equals(id, ignoreCase = true) }
+                                    if (current != null) {
+                                        ViewerAccessPolicy.upsertSpecialUser(context, current.copy(permissions = customPermissions, profile = profile, enabled = enabled))
+                                        specialUsers = ViewerAccessPolicy.getSpecialUsers(context)
+                                        val updated = ViewerAccessPolicy.getSpecialUsers(context).firstOrNull { it.installationId == id }
+                                        savedUserPermissions = customPermissions
+                                        if (updated != null) {
+                                            sendDirectlyToViewer(id)
+                                            message = "تغییرات اعمال و برای Viewer ارسال شد."
+                                        }
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(6.dp)); Text("اعمال تغییرات و ارسال") }
+                            }
                         }
                     }
                 }
@@ -361,6 +483,13 @@ fun ViewerAccessManagementScreen(
                             Text("انقضا: ${user.expiresAt?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it)) } ?: "بدون انقضا"}", style = MaterialTheme.typography.bodySmall)
                             if (user.details.isNotBlank()) Text(user.details, style = MaterialTheme.typography.bodySmall)
                             Text("مجوزهای فعال: ${user.permissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size}", style = MaterialTheme.typography.bodySmall)
+                            Text("آخرین تغییر: ${accessDateTime(user.updatedAt)}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                if (ViewerAccessPolicy.policyNeedsResend(user)) "⚠ نیاز به همگام‌سازی"
+                                else if (user.lastPolicyAppliedAt > 0L && user.lastPolicyAppliedVersion == user.lastPolicySentVersion) "✓ همگام با Viewer"
+                                else "ارسال شده؛ در انتظار اعمال Viewer",
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                         TextButton(onClick = { loadUser(user) }) { Text("ویرایش") }
                         IconButton(onClick = { ViewerAccessPolicy.removeSpecialUser(context, user.installationId); specialUsers = ViewerAccessPolicy.getSpecialUsers(context) }) { Icon(Icons.Filled.Delete, null) }
