@@ -738,6 +738,7 @@ fun ViewerAccessManagementScreen(
         )
     }
 
+    }
 private fun profileTitle(profile: String) = when (profile) {
     ViewerAccessPolicy.PROFILE_PUBLIC -> "عمومی"
     ViewerAccessPolicy.PROFILE_TRAINING -> "تمرینی"
