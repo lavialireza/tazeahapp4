@@ -44,72 +44,87 @@ object UpdateHelper {
 
     suspend fun checkForUpdate(currentVersionCode: Int): Result<UpdateInfo?> = withContext(Dispatchers.IO) {
         runCatching {
+            // بروزرسانی کاملاً آنلاین است: هیچ update.json محلی یا فایل واسطه‌ای
+            // برای تشخیص نسخه دانلود نمی‌شود. فقط Release رسمی GitHub بررسی می‌شود.
             val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"; connectTimeout = 8000; readTimeout = 10000
+                requestMethod = "GET"
+                connectTimeout = 10000
+                readTimeout = 15000
+                instanceFollowRedirects = true
                 setRequestProperty("Accept", "application/vnd.github+json")
                 setRequestProperty("User-Agent", "Tazieh-Android-Updater")
             }
             try {
-                if (connection.responseCode !in 200..299) throw IllegalStateException("خطای سرور: ${connection.responseCode}")
+                if (connection.responseCode !in 200..299) {
+                    throw IllegalStateException("بررسی بروزرسانی ناموفق بود: ${connection.responseCode}")
+                }
                 val releases = JSONArray(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
                 val viewer = com.example.bookapp.BuildConfig.PUBLIC_VIEWER
-                val releaseAsset = if (viewer) "app-viewer-release.apk" else "app-admin-release.apk"
-                val debugAsset = if (viewer) "app-viewer-debug.apk" else "app-admin-debug.apk"
+                val preferredNames = if (viewer) {
+                    listOf("app-viewer-release.apk", "app-viewer-debug.apk")
+                } else {
+                    listOf("app-admin-release.apk", "app-admin-debug.apk")
+                }
+
                 var best: UpdateInfo? = null
                 for (i in 0 until releases.length()) {
                     val release = releases.getJSONObject(i)
                     if (release.optBoolean("draft", false)) continue
+
                     val tag = release.optString("tag_name")
-                    val assets = release.optJSONArray("assets") ?: continue
-                    var manifest: JSONObject? = null
-                    var manifestUrl: String? = null
-                    var apkUrl: String? = null
-                    var isReleaseApk = false
-                    for (j in 0 until assets.length()) {
-                        val a = assets.getJSONObject(j); val name = a.optString("name")
-                        val url = a.optString("browser_download_url").takeIf { it.isNotBlank() }
-                        if (name == MANIFEST_ASSET) manifestUrl = url
-                        if (name == releaseAsset) { apkUrl = url; isReleaseApk = url != null }
-                        if (name == debugAsset && apkUrl == null) apkUrl = url
-                    }
-                    if (manifestUrl != null) {
-                        runCatching {
-                            val mc = (URL(manifestUrl).openConnection() as HttpURLConnection).apply {
-                                connectTimeout = 6000; readTimeout = 8000; setRequestProperty("User-Agent", "Tazieh-Android-Updater")
-                            }
-                            try { if (mc.responseCode in 200..299) manifest = JSONObject(mc.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }) } finally { mc.disconnect() }
-                        }
-                    }
-                    val buildNumber = manifest?.optInt("versionCode", 0)?.takeIf { it > 0 }
-                        ?: Regex("^apk-build-(\\d+)$").find(tag)?.groupValues?.get(1)?.toIntOrNull()
+                    val buildNumber = Regex("^apk-build-(\\d+)$").find(tag)
+                        ?.groupValues?.get(1)?.toIntOrNull()
+                        ?: release.optInt("versionCode", 0).takeIf { it > 0 }
                         ?: continue
-                    if (buildNumber <= currentVersionCode || apkUrl == null) continue
-                    // Manifest مشترک می‌تواند هر دو APK را معرفی کند؛ هر flavor فقط APK خودش را انتخاب می‌کند.
-                    val selectedApkName = if (viewer) {
-                        manifest?.optString("viewerApk").orEmpty()
-                            .ifBlank { manifest?.optString("apkFile").orEmpty() }
-                    } else {
-                        manifest?.optString("adminApk").orEmpty()
-                            .ifBlank { manifest?.optString("apkFile").orEmpty() }
-                    }
-                    if (selectedApkName.isNotBlank()) {
-                        var exact: String? = null
+
+                    if (buildNumber <= currentVersionCode) continue
+
+                    val assets = release.optJSONArray("assets") ?: continue
+                    var apkUrl: String? = null
+                    var apkName = ""
+                    for (preferred in preferredNames) {
                         for (j in 0 until assets.length()) {
-                            val a = assets.getJSONObject(j)
-                            if (a.optString("name") == selectedApkName) {
-                                exact = a.optString("browser_download_url").takeIf { it.isNotBlank() }
-                                if (exact != null) break
+                            val asset = assets.getJSONObject(j)
+                            if (asset.optString("name") == preferred) {
+                                apkUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                                if (apkUrl != null) {
+                                    apkName = preferred
+                                    break
+                                }
                             }
                         }
-                        if (exact != null) apkUrl = exact
+                        if (apkUrl != null) break
                     }
+                    if (apkUrl == null) continue
+
                     val notes = mutableListOf<String>()
-                    manifest?.optJSONArray("releaseNotes")?.let { a -> for (n in 0 until a.length()) notes += a.optString(n) }
-                    val info = UpdateInfo(buildNumber, tag, apkUrl!!, isReleaseApk, manifest?.optString("versionName").orEmpty().ifBlank { tag }, manifest?.optInt("minSupportedVersion", 0) ?: 0, manifest?.optBoolean("forceUpdate", false) ?: false, manifest?.optString("releaseDate").orEmpty(), notes)
-                    if (best == null || info.buildNumber > best!!.buildNumber || (info.buildNumber == best!!.buildNumber && info.isReleaseApk && !best!!.isReleaseApk)) best = info
+                    release.optString("body").takeIf { it.isNotBlank() }?.lineSequence()
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotBlank() }
+                        ?.forEach { notes += it.removePrefix("- ").removePrefix("* ") }
+
+                    val publishedAt = release.optString("published_at")
+                    val versionName = release.optString("name").takeIf { it.isNotBlank() } ?: tag
+                    val info = UpdateInfo(
+                        buildNumber = buildNumber,
+                        tagName = tag,
+                        downloadUrl = apkUrl,
+                        isReleaseApk = apkName.endsWith("-release.apk"),
+                        versionName = versionName,
+                        minSupportedVersion = 0,
+                        forceUpdate = false,
+                        releaseDate = publishedAt.take(10),
+                        releaseNotes = notes
+                    )
+                    if (best == null || info.buildNumber > best!!.buildNumber ||
+                        (info.buildNumber == best!!.buildNumber && info.isReleaseApk && !best!!.isReleaseApk)) {
+                        best = info
+                    }
                 }
                 best
-            } finally { connection.disconnect() }
+            } finally {
+                connection.disconnect()
+            }
         }
     }
 
