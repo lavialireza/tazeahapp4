@@ -677,7 +677,6 @@ fun ViewerAccessManagementScreen(
             confirmButton = { TextButton(onClick = { showAccessHistory = false }) { Text("بستن") } }
         )
     }
-}
 
     if (showComparePolicies && selectedUser != null) {
         val diffs = ViewerAccessPolicy.permissionLabels.keys.mapNotNull { key ->

@@ -9,7 +9,6 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -18,18 +17,12 @@ import java.net.URL
 object UpdateHelper {
     private const val REPO = "lavialireza/taziehappv3"
     private const val RELEASES_API = "https://api.github.com/repos/$REPO/releases?per_page=20"
-    private const val MANIFEST_ASSET = "update.json"
 
     data class UpdateInfo(
         val buildNumber: Int,
         val tagName: String,
         val downloadUrl: String,
-        val isReleaseApk: Boolean,
-        val versionName: String = tagName,
-        val minSupportedVersion: Int = 0,
-        val forceUpdate: Boolean = false,
-        val releaseDate: String = "",
-        val releaseNotes: List<String> = emptyList()
+        val isReleaseApk: Boolean
     )
 
     data class InstalledVersion(val buildNumber: Int, val versionName: String)
@@ -45,74 +38,65 @@ object UpdateHelper {
     suspend fun checkForUpdate(currentVersionCode: Int): Result<UpdateInfo?> = withContext(Dispatchers.IO) {
         runCatching {
             val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"; connectTimeout = 8000; readTimeout = 10000
+                requestMethod = "GET"
+                connectTimeout = 8000
+                readTimeout = 10000
                 setRequestProperty("Accept", "application/vnd.github+json")
                 setRequestProperty("User-Agent", "Tazieh-Android-Updater")
             }
             try {
-                if (connection.responseCode !in 200..299) throw IllegalStateException("خطای سرور: ${connection.responseCode}")
-                val releases = JSONArray(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                if (connection.responseCode !in 200..299) {
+                    throw IllegalStateException("خطای سرور: ${connection.responseCode}")
+                }
+
+                val json = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val releases = JSONArray(json)
                 val viewer = com.example.bookapp.BuildConfig.PUBLIC_VIEWER
                 val releaseAsset = if (viewer) "app-viewer-release.apk" else "app-admin-release.apk"
                 val debugAsset = if (viewer) "app-viewer-debug.apk" else "app-admin-debug.apk"
+
                 var best: UpdateInfo? = null
                 for (i in 0 until releases.length()) {
                     val release = releases.getJSONObject(i)
                     if (release.optBoolean("draft", false)) continue
+
                     val tag = release.optString("tag_name")
+                    val match = Regex("^apk-build-(\\d+)$").find(tag) ?: continue
+                    val buildNumber = match.groupValues[1].toIntOrNull() ?: continue
+                    if (buildNumber <= currentVersionCode) continue
+
                     val assets = release.optJSONArray("assets") ?: continue
-                    var manifest: JSONObject? = null
-                    var manifestUrl: String? = null
                     var apkUrl: String? = null
                     var isReleaseApk = false
-                    for (j in 0 until assets.length()) {
-                        val a = assets.getJSONObject(j); val name = a.optString("name")
-                        val url = a.optString("browser_download_url").takeIf { it.isNotBlank() }
-                        if (name == MANIFEST_ASSET) manifestUrl = url
-                        if (name == releaseAsset) { apkUrl = url; isReleaseApk = url != null }
-                        if (name == debugAsset && apkUrl == null) apkUrl = url
+
+                    for (assetIndex in 0 until assets.length()) {
+                        val asset = assets.getJSONObject(assetIndex)
+                        if (asset.optString("name") == releaseAsset) {
+                            apkUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                            isReleaseApk = apkUrl != null
+                            if (isReleaseApk) break
+                        }
                     }
-                    if (manifestUrl != null) {
-                        runCatching {
-                            val mc = (URL(manifestUrl).openConnection() as HttpURLConnection).apply {
-                                connectTimeout = 6000; readTimeout = 8000; setRequestProperty("User-Agent", "Tazieh-Android-Updater")
+                    if (apkUrl == null) {
+                        for (assetIndex in 0 until assets.length()) {
+                            val asset = assets.getJSONObject(assetIndex)
+                            if (asset.optString("name") == debugAsset) {
+                                apkUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                                break
                             }
-                            try { if (mc.responseCode in 200..299) manifest = JSONObject(mc.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }) } finally { mc.disconnect() }
                         }
                     }
-                    val buildNumber = manifest?.optInt("versionCode", 0)?.takeIf { it > 0 }
-                        ?: Regex("^apk-build-(\\d+)$").find(tag)?.groupValues?.get(1)?.toIntOrNull()
-                        ?: continue
-                    if (buildNumber <= currentVersionCode || apkUrl == null) continue
-                    val apkName = manifest?.optString("apkFile").orEmpty()
-                    if (apkName.isNotBlank()) {
-                        var exact: String? = null
-                        for (j in 0 until assets.length()) {
-                            val a = assets.getJSONObject(j)
-                            if (a.optString("name") == apkName) exact = a.optString("browser_download_url").takeIf { it.isNotBlank() }
-                        }
-                        if (exact != null) apkUrl = exact
+
+                    if (apkUrl != null && (best == null || buildNumber > best!!.buildNumber ||
+                                (buildNumber == best!!.buildNumber && isReleaseApk && !best!!.isReleaseApk))) {
+                        best = UpdateInfo(buildNumber, tag, apkUrl, isReleaseApk)
                     }
-                    val notes = mutableListOf<String>()
-                    manifest?.optJSONArray("releaseNotes")?.let { a -> for (n in 0 until a.length()) notes += a.optString(n) }
-                    val info = UpdateInfo(buildNumber, tag, apkUrl!!, isReleaseApk, manifest?.optString("versionName").orEmpty().ifBlank { tag }, manifest?.optInt("minSupportedVersion", 0) ?: 0, manifest?.optBoolean("forceUpdate", false) ?: false, manifest?.optString("releaseDate").orEmpty(), notes)
-                    if (best == null || info.buildNumber > best!!.buildNumber || (info.buildNumber == best!!.buildNumber && info.isReleaseApk && !best!!.isReleaseApk)) best = info
                 }
                 best
-            } finally { connection.disconnect() }
+            } finally {
+                connection.disconnect()
+            }
         }
-    }
-
-    fun createUpdateManifest(context: Context, versionCode: Int, versionName: String, minSupportedVersion: Int, forceUpdate: Boolean, apkFile: String, releaseNotes: List<String>): File {
-        val dir = File(context.filesDir, "updates").apply { mkdirs() }
-        val file = File(dir, MANIFEST_ASSET)
-        val json = JSONObject().apply {
-            put("appName", if (com.example.bookapp.BuildConfig.PUBLIC_VIEWER) "Tazieh Viewer" else "Tazieh Admin")
-            put("versionCode", versionCode); put("versionName", versionName); put("minSupportedVersion", minSupportedVersion)
-            put("forceUpdate", forceUpdate); put("apkFile", apkFile); put("releaseDate", java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()))
-            put("releaseNotes", JSONArray(releaseNotes))
-        }
-        file.writeText(json.toString(2), Charsets.UTF_8); return file
     }
 
     /**

@@ -19,7 +19,6 @@ import com.example.bookapp.BuildConfig
 import com.example.bookapp.data.AppDatabase
 import com.example.bookapp.data.UpdateHelper
 import com.example.bookapp.data.Prefs
-import com.example.bookapp.data.UpdateHistoryStore
 import kotlinx.coroutines.launch
 
 private const val APP_WEBSITE = "" // آدرس واقعی سایت برنامه را اینجا وارد کنید؛ آدرس مخزن GitHub نباید در معرفی عمومی نمایش داده شود.
@@ -145,7 +144,6 @@ fun SettingsScreen(
     onImportViewerAccess: suspend (android.net.Uri) -> Result<String> = { Result.success("") },
     onSyncContent: suspend () -> Result<Unit>,
     onCheckAppUpdate: suspend () -> Result<UpdateHelper.UpdateInfo?> = { Result.success(null) },
-    showUpdateManifestTools: Boolean = false,
     db: AppDatabase,
     onBack: () -> Unit
 ) {
@@ -341,8 +339,7 @@ fun SettingsScreen(
                                 } else {
                                     downloadingAppUpdate = true
                                     downloadPercent = 0
-                                    val notes = if (info.releaseNotes.isEmpty()) "" else "\nتغییرات:\n• " + info.releaseNotes.joinToString("\n• ")
-                                    appUpdateMessage = "نسخه فعلی: ${com.example.bookapp.data.UpdateHelper.getInstalledVersion(context).versionName}\nنسخه جدید: ${info.versionName} (build ${info.buildNumber})\n${if (info.forceUpdate) "این بروزرسانی اجباری است.\n" else ""}${if (info.minSupportedVersion > 0) "حداقل نسخه مجاز: ${info.minSupportedVersion}\n" else ""}${if (info.releaseDate.isNotBlank()) "تاریخ انتشار: ${info.releaseDate}\n" else ""}دریافت نسخه جدید داخل برنامه آغاز شد.$notes"
+                                    appUpdateMessage = "نسخه فعلی: ${com.example.bookapp.data.UpdateHelper.getInstalledVersion(context).versionName}\nنسخه جدید: ${info.tagName}\nدریافت نسخه جدید داخل برنامه آغاز شد."
                                     val downloadResult = com.example.bookapp.data.UpdateHelper.downloadAndInstall(
                                         context,
                                         info
@@ -350,11 +347,7 @@ fun SettingsScreen(
                                         downloadPercent = percent
                                     }
                                     downloadingAppUpdate = false
-                                    downloadResult.onSuccess {
-                                        com.example.bookapp.data.UpdateHistoryStore.record(context, installed.buildNumber, info.buildNumber, true, "درخواست نصب با موفقیت انجام شد")
-                                    }
                                     downloadResult.onFailure { error ->
-                                        com.example.bookapp.data.UpdateHistoryStore.record(context, installed.buildNumber, info.buildNumber, false, error.message ?: "دریافت/نصب ناموفق")
                                         appUpdateMessage = error.message ?: "دریافت بروزرسانی ناموفق بود."
                                     }
                                 }
@@ -385,58 +378,6 @@ fun SettingsScreen(
             appUpdateMessage?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(it, style = MaterialTheme.typography.bodySmall)
-            }
-
-            if (showUpdateManifestTools) {
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(12.dp))
-                Text("مدیریت Manifest بروزرسانی", style = MaterialTheme.typography.bodyLarge)
-                Text("این فایل را همراه APK در GitHub Release با نام update.json قرار دهید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                var manifestVersion by remember { mutableStateOf(UpdateHelper.getInstalledVersion(context).buildNumber.toString()) }
-                var manifestName by remember { mutableStateOf(UpdateHelper.getInstalledVersion(context).versionName) }
-                var minVersion by remember { mutableStateOf("0") }
-                var apkFile by remember { mutableStateOf(if (BuildConfig.PUBLIC_VIEWER) "app-viewer-release.apk" else "app-admin-release.apk") }
-                var forceUpdate by remember { mutableStateOf(false) }
-                var notesText by remember { mutableStateOf("") }
-                var manifestMessage by remember { mutableStateOf<String?>(null) }
-                OutlinedTextField(manifestVersion, { manifestVersion = it.filter { c -> c.isDigit() } }, label = { Text("versionCode") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(manifestName, { manifestName = it }, label = { Text("versionName") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(minVersion, { minVersion = it.filter { c -> c.isDigit() } }, label = { Text("حداقل versionCode مجاز") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(apkFile, { apkFile = it }, label = { Text("نام فایل APK در Release") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(notesText, { notesText = it }, label = { Text("تغییرات نسخه؛ هر مورد در یک خط") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Checkbox(checked = forceUpdate, onCheckedChange = { forceUpdate = it })
-                    Text("بروزرسانی اجباری")
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        val vc = manifestVersion.toIntOrNull(); val min = minVersion.toIntOrNull() ?: 0
-                        if (vc == null || vc <= 0 || apkFile.isBlank()) { manifestMessage = "versionCode و نام APK را صحیح وارد کنید." }
-                        else {
-                            val f = UpdateHelper.createUpdateManifest(context, vc, manifestName, min, forceUpdate, apkFile.trim(), notesText.lines().map { it.trim() }.filter { it.isNotBlank() })
-                            manifestMessage = "update.json ساخته شد: ${f.name}"
-                        }
-                    }) { Text("ساخت update.json") }
-                    Button(onClick = {
-                        val f = java.io.File(context.filesDir, "updates/update.json")
-                        if (f.exists()) {
-                            val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".fileprovider", f)
-                            val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply { type = "application/json"; putExtra(android.content.Intent.EXTRA_STREAM, uri); addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                            context.startActivity(android.content.Intent.createChooser(share, "ارسال update.json"))
-                        } else manifestMessage = "ابتدا update.json را بسازید."
-                    }) { Text("ارسال فایل") }
-                }
-                manifestMessage?.let { Spacer(Modifier.height(6.dp)); Text(it, style = MaterialTheme.typography.bodySmall) }
-                Spacer(Modifier.height(8.dp))
-                Text("تاریخچه بروزرسانی", style = MaterialTheme.typography.titleSmall)
-                UpdateHistoryStore.get(context).take(8).forEach { h ->
-                    Text("${java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(h.at))} — ${h.fromVersion} → ${h.toVersion} — ${if (h.success) "موفق" else "ناموفق"}", style = MaterialTheme.typography.bodySmall)
-                }
             }
 
             Spacer(Modifier.height(24.dp))
