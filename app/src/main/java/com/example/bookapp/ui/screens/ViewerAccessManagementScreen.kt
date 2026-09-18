@@ -28,45 +28,65 @@ import android.content.ClipData
 import androidx.compose.material3.ExperimentalMaterial3Api
 
 
-private data class PermissionGroup(
+private data class PermissionTree(
+    val parentKey: String,
     val title: String,
-    val keys: List<String>
+    val children: List<String>
 )
 
 /**
- * گروه‌ها نقش «والد» دارند و کلیدهای داخل هر گروه «فرزند» هستند.
- * والد کل فرزندان را یکجا کنترل می‌کند، اما هر فرزند مستقل نیز قابل تنظیم است.
+ * ساختار استاندارد دسترسی: والد فقط قابلیت اصلی را کنترل می‌کند و فرزندان
+ * جزئیات قابل کنترل همان قابلیت هستند. خاموش بودن والد، همه فرزندان را مؤثرًا خاموش می‌کند.
  */
-private val accessPermissionGroups = listOf(
-    PermissionGroup("مطالعه و جستجو", listOf("read", "search", "advancedSearch", "compare", "training")),
-    PermissionGroup("رسانه و نمایش", listOf("audio", "tts", "gallery")),
-    PermissionGroup("امکانات شخصی", listOf("notes", "bookmarks", "copy", "share")),
-    PermissionGroup("امکانات پژوهشی", listOf("footnotes", "footnoteSync")),
-    PermissionGroup("خروجی", listOf("pdf")),
-    PermissionGroup("اطلاعات برنامه", listOf("appIntro"))
+private val accessPermissionTrees = listOf(
+    PermissionTree("read", "مطالعه و جستجو", listOf("read", "search", "advancedSearch", "compare", "training")),
+    PermissionTree("audio", "رسانه و نمایش", listOf("audio", "tts", "gallery")),
+    PermissionTree("notes", "امکانات شخصی", listOf("notes", "bookmarks", "copy", "share")),
+    PermissionTree("footnotes", "امکانات پژوهشی", listOf("footnotes", "footnoteSync")),
+    PermissionTree("pdf", "خروجی", listOf("pdf")),
+    PermissionTree("appIntro", "اطلاعات برنامه", listOf("appIntro"))
+)
+
+private val permissionChildren = mapOf(
+    "read" to listOf("read.view", "read.navigate"),
+    "search" to listOf("search.basic"),
+    "advancedSearch" to listOf("advancedSearch.filters"),
+    "compare" to listOf("compare.view"),
+    "training" to listOf("training.rehearse"),
+    "audio" to listOf("audio.play"),
+    "tts" to listOf("tts.play"),
+    "notes" to listOf("notes.view", "notes.add", "notes.edit", "notes.delete"),
+    "bookmarks" to listOf("bookmarks.view", "bookmarks.add", "bookmarks.delete"),
+    "gallery" to listOf("gallery.view", "gallery.largePreview"),
+    "copy" to listOf("copy.text"),
+    "share" to listOf("share.content"),
+    "pdf" to listOf("pdf.create", "pdf.save"),
+    "footnotes" to listOf("footnotes.view", "footnotes.add", "footnotes.edit", "footnotes.delete", "footnoteSync.dictionary"),
+    "footnoteSync" to listOf("footnoteSync.dictionary"),
+    "appIntro" to listOf("appIntro.view")
 )
 
 private fun permissionDescription(key: String): String = when (key) {
-    "read" -> "مشاهده محتوای تعزیه و ورود به بخش‌های مطالعه"
-    "search" -> "استفاده از جستجوی معمولی در محتوای Viewer"
-    "advancedSearch" -> "استفاده از امکانات و فیلترهای پیشرفته جستجو"
-    "compare" -> "دسترسی به مقایسه متون و بخش‌ها"
-    "training" -> "استفاده از حالت تمرین و بازخوانی"
-    "audio" -> "پخش فایل‌های صوتی مرتبط با محتوا"
-    "tts" -> "خواندن متن با تبدیل متن به گفتار"
-    "notes" -> "ایجاد و مدیریت یادداشت‌های شخصی"
-    "bookmarks" -> "افزودن و مشاهده علاقه‌مندی‌ها"
-    "gallery" -> "مشاهده و استفاده از گالری تصاویر"
-    "copy" -> "کپی متن از محتوای Viewer"
-    "share" -> "اشتراک‌گذاری محتوای مجاز"
-    "pdf" -> "استفاده از خروجی PDF"
-    "footnotes" -> "مشاهده، افزودن و مدیریت پاورقی‌ها"
-    "footnoteSync" -> "افزودن واژه و توضیح پاورقی به دیکشنری؛ مستقل از خود قابلیت پاورقی"
-    "appIntro" -> "دسترسی به معرفی و اطلاعات برنامه"
-    else -> ""
+    "read" -> "والد مطالعه؛ کنترل کلی دسترسی به مطالعه"
+    "search" -> "والد جستجوی معمولی"
+    "advancedSearch" -> "والد جستجوی پیشرفته"
+    "compare" -> "والد مقایسه متون"
+    "training" -> "والد تمرین و بازخوانی"
+    "audio" -> "والد امکانات صوتی"
+    "tts" -> "والد تبدیل متن به گفتار"
+    "notes" -> "والد یادداشت‌های شخصی"
+    "bookmarks" -> "والد علاقه‌مندی‌ها"
+    "gallery" -> "والد گالری"
+    "copy" -> "والد کپی متن"
+    "share" -> "والد اشتراک‌گذاری"
+    "pdf" -> "والد خروجی PDF"
+    "footnotes" -> "والد پاورقی"
+    "footnoteSync" -> "والد همگام‌سازی پاورقی با دیکشنری"
+    "appIntro" -> "والد معرفی برنامه"
+    else -> "قابلیت جزئی مستقل"
 }
 
-private val sensitivePermissionKeys = setOf("copy", "share", "pdf", "gallery", "training")
+private val sensitivePermissionKeys = setOf("copy", "share", "pdf", "gallery", "training", "footnotes.delete", "notes.delete", "bookmarks.delete")
 
 private fun accessDateTime(value: Long): String =
     if (value <= 0L) "ثبت نشده"
@@ -80,62 +100,57 @@ private fun PermissionGroupEditor(
     searchQuery: String,
     compact: Boolean = false
 ) {
-    var expandedGroups by remember { mutableStateOf(if (compact) emptySet<String>() else accessPermissionGroups.map { it.title }.toSet()) }
+    var expandedParents by remember { mutableStateOf(if (compact) emptySet<String>() else accessPermissionTrees.map { it.parentKey }.toSet()) }
     val labels = ViewerAccessPolicy.permissionLabels
-    val visible = accessPermissionGroups.mapNotNull { group ->
-        val items = group.keys.mapNotNull { key -> labels[key]?.let { key to it } }
-            .filter { (key, label) ->
-                searchQuery.isBlank() || label.contains(searchQuery, ignoreCase = true) || key.contains(searchQuery, ignoreCase = true)
-            }
-        if (items.isEmpty()) null else group to items
+    val visible = accessPermissionTrees.mapNotNull { tree ->
+        val parentMatches = searchQuery.isBlank() || labels[tree.parentKey]?.contains(searchQuery, ignoreCase = true) == true
+        val children = permissionChildren[tree.parentKey].orEmpty()
+        val childMatches = children.filter { key ->
+            labels[key]?.contains(searchQuery, ignoreCase = true) == true || key.contains(searchQuery, ignoreCase = true)
+        }
+        if (searchQuery.isBlank() || parentMatches || childMatches.isNotEmpty()) tree to if (parentMatches || searchQuery.isBlank()) children else childMatches else null
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        visible.forEach { (group, items) ->
-            val allEnabled = group.keys.all { permissions[it] == true }
-            val anyEnabled = group.keys.any { permissions[it] == true }
+        visible.forEach { (tree, _) ->
+            val parentEnabled = permissions[tree.parentKey] == true
+            val childKeys = permissionChildren[tree.parentKey].orEmpty()
+            val childEnabledCount = childKeys.count { permissions[it] == true }
+            val allChildren = childKeys.isNotEmpty() && childKeys.all { permissions[it] == true }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Column(Modifier.weight(1f).clickable {
-                            expandedGroups = if (group.title in expandedGroups) expandedGroups - group.title else expandedGroups + group.title
+                            expandedParents = if (tree.parentKey in expandedParents) expandedParents - tree.parentKey else expandedParents + tree.parentKey
                         }) {
-                            Text("والد: ${group.title}", style = MaterialTheme.typography.titleSmall)
-                            Text("فرزندان فعال: ${group.keys.count { permissions[it] == true }} از ${group.keys.size}", style = MaterialTheme.typography.bodySmall)
+                            Text("والد: ${tree.title}", style = MaterialTheme.typography.titleSmall)
+                            Text("وضعیت والد: ${if (parentEnabled) "فعال" else "غیرفعال"} | فرزندان فعال: $childEnabledCount از ${childKeys.size}", style = MaterialTheme.typography.bodySmall)
                         }
-                        Switch(
-                            checked = allEnabled,
-                            onCheckedChange = { value -> onBulkChange(group.keys, value) }
-                        )
+                        Switch(checked = parentEnabled, onCheckedChange = { value ->
+                            onChange(tree.parentKey, value)
+                            if (!value && childKeys.isNotEmpty()) onBulkChange(childKeys, false)
+                            if (value && childEnabledCount == 0 && childKeys.isNotEmpty()) onBulkChange(childKeys, true)
+                        })
                     }
-                    if (group.title in expandedGroups) {
+                    if (tree.parentKey in expandedParents) {
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            if (allEnabled) "همه قابلیت‌های این والد فعال است" else if (anyEnabled) "برخی فرزندان فعال هستند؛ هر فرزند مستقل قابل تنظیم است" else "همه فرزندان این والد غیرفعال هستند",
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text(permissionDescription(tree.parentKey), style = MaterialTheme.typography.bodySmall)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = { onBulkChange(group.keys, true) }) { Text("فعال کردن همه فرزندان") }
-                            TextButton(onClick = { onBulkChange(group.keys, false) }) { Text("غیرفعال کردن همه فرزندان") }
+                            TextButton(onClick = { onBulkChange(childKeys, true) }) { Text("فعال کردن فرزندان") }
+                            TextButton(onClick = { onBulkChange(childKeys, false) }) { Text("غیرفعال کردن فرزندان") }
                         }
-                        items.forEach { (key, label) ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 2.dp).padding(start = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
+                        childKeys.forEach { key ->
+                            val label = labels[key] ?: key
+                            Row(Modifier.fillMaxWidth().padding(start = 18.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                 Column(Modifier.weight(1f)) {
                                     Text("فرزند: $label")
-                                    val desc = permissionDescription(key)
-                                    if (desc.isNotBlank()) Text(desc, style = MaterialTheme.typography.bodySmall)
+                                    Text(permissionDescription(key), style = MaterialTheme.typography.bodySmall)
                                 }
-                                Switch(checked = permissions[key] == true, onCheckedChange = { value -> onChange(key, value) })
+                                Switch(enabled = parentEnabled, checked = permissions[key] == true, onCheckedChange = { value -> onChange(key, value) })
                             }
                         }
+                        if (childKeys.isNotEmpty() && allChildren) Text("همه فرزندان فعال هستند.", style = MaterialTheme.typography.labelSmall)
+                        else if (childEnabledCount > 0) Text("والد فعال است و فقط بخشی از فرزندان فعال هستند.", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

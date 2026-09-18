@@ -121,7 +121,12 @@ fun AppNavigation(
     val publicViewer = BuildConfig.PUBLIC_VIEWER
     var viewerPermissions by remember(publicViewer) { mutableStateOf(if (publicViewer) ViewerAccessPolicy.getEffectivePermissions(context) else ViewerAccessPolicy.permissionLabels.keys.associateWith { true }) }
     val navController: NavHostController = rememberNavController()
-    fun featureEnabled(key: String): Boolean = !publicViewer || viewerPermissions[key] == true
+    fun featureEnabled(key: String): Boolean {
+        if (!publicViewer) return true
+        val enabled = viewerPermissions[key] == true
+        val parent = ViewerAccessPolicy.permissionParents[key]
+        return enabled && (parent == null || viewerPermissions[parent] == true)
+    }
     fun navigateIfAllowed(key: String, route: String) {
         if (featureEnabled(key)) navController.navigate(route)
         else android.widget.Toast.makeText(context, "این قابلیت در سیاست دسترسی فعلی فعال نیست.", android.widget.Toast.LENGTH_SHORT).show()
@@ -1320,7 +1325,7 @@ fun AppNavigation(
                     },
                     footnotesForSection = { id -> db.footnoteDao().getBySection(id) },
                     onAddFootnote = { id, term, explanation ->
-                        if (!featureEnabled("footnotes")) {
+                        if (!featureEnabled("footnotes.add")) {
                             Result.failure(IllegalStateException("قابلیت پاورقی در سیاست دسترسی فعلی فعال نیست."))
                         } else runCatching {
                             val cleanTerm = term.trim()
@@ -1335,11 +1340,15 @@ fun AppNavigation(
                             require(db.footnoteDao().getByUid(uid) != null) { "پاورقی در پایگاه داده تأیید نشد" }
                         }
                     },
-                    onEditFootnote = { id, fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
+                    onEditFootnote = { id, fn, term, explanation -> if (featureEnabled("footnotes.edit")) scope.launch {
                         db.footnoteDao().update(fn.copy(sectionId = id, term = term.trim(), explanation = explanation.trim()))
                     } },
-                    onDeleteFootnote = { _, fn -> if (featureEnabled("footnotes")) scope.launch { db.footnoteDao().delete(fn.id) } },
-                    canAddFootnoteToDictionary = featureEnabled("footnoteSync"),
+                    onDeleteFootnote = { _, fn -> if (featureEnabled("footnotes.delete")) scope.launch { db.footnoteDao().delete(fn.id) } },
+                    canViewFootnotes = featureEnabled("footnotes.view"),
+                    canAddFootnote = featureEnabled("footnotes.add"),
+                    canEditFootnote = featureEnabled("footnotes.edit"),
+                    canDeleteFootnote = featureEnabled("footnotes.delete"),
+                    canAddFootnoteToDictionary = featureEnabled("footnoteSync.dictionary"),
                     fieldTitle = breadcrumb.first,
                     taziehTitle = breadcrumb.second,
                     roleTitle = breadcrumb.third,
@@ -1396,10 +1405,14 @@ fun AppNavigation(
                 relatedSections = relatedSections,
                 onRelatedClick = { related -> navController.navigate("text/${related.sectionId}") },
                 footnotes = if (featureEnabled("footnotes")) footnotes else emptyList(),
-                canAddFootnoteToDictionary = featureEnabled("footnoteSync"),
+                canViewFootnotes = featureEnabled("footnotes.view"),
+                canAddFootnote = featureEnabled("footnotes.add"),
+                canEditFootnote = featureEnabled("footnotes.edit"),
+                canDeleteFootnote = featureEnabled("footnotes.delete"),
+                canAddFootnoteToDictionary = featureEnabled("footnoteSync.dictionary"),
                 saveError = footnoteError,
                 onAddFootnote = { term, explanation ->
-                    if (!featureEnabled("footnotes")) {
+                    if (!featureEnabled("footnotes.add")) {
                         Result.failure(IllegalStateException("قابلیت پاورقی در سیاست دسترسی فعلی فعال نیست."))
                     } else {
                         runCatching {
@@ -1436,7 +1449,7 @@ fun AppNavigation(
                         }
                     }
                 },
-                onEditFootnote = { fn, term, explanation -> if (featureEnabled("footnotes")) scope.launch {
+                onEditFootnote = { fn, term, explanation -> if (featureEnabled("footnotes.edit")) scope.launch {
                     footnoteError = null
                     runCatching {
                         val cleanTerm = term.trim()
@@ -1450,7 +1463,7 @@ fun AppNavigation(
                         reloadFootnotes()
                     }.onFailure { footnoteError = "ویرایش پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}" }
                 } },
-                onDeleteFootnote = { fn -> if (featureEnabled("footnotes")) scope.launch {
+                onDeleteFootnote = { fn -> if (featureEnabled("footnotes.delete")) scope.launch {
                     footnoteError = null
                     runCatching {
                         db.footnoteDao().delete(fn.id)

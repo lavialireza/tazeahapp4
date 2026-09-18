@@ -31,7 +31,53 @@ object ViewerAccessPolicy {
         "pdf" to "PDF",
         "footnotes" to "پاورقی",
         "footnoteSync" to "انتقال پاورقی به دیکشنری",
-        "appIntro" to "معرفی برنامه"
+        "appIntro" to "معرفی برنامه",
+
+        // مجوزهای فرزند؛ هر قابلیت اصلی والد مستقل است و فرزندان جزئیات واقعی آن را کنترل می‌کنند.
+        "read.view" to "مطالعه: مشاهده متن",
+        "read.navigate" to "مطالعه: جابه‌جایی بین بخش‌ها",
+        "search.basic" to "جستجو: جستجوی معمولی",
+        "advancedSearch.filters" to "جستجوی پیشرفته: فیلترها",
+        "compare.view" to "مقایسه: مشاهده و اجرای مقایسه",
+        "training.rehearse" to "تمرین: اجرای بازخوانی",
+        "audio.play" to "صوت: پخش",
+        "tts.play" to "تبدیل متن به گفتار: اجرا",
+        "notes.view" to "یادداشت: مشاهده",
+        "notes.add" to "یادداشت: افزودن",
+        "notes.edit" to "یادداشت: ویرایش",
+        "notes.delete" to "یادداشت: حذف",
+        "bookmarks.view" to "علاقه‌مندی: مشاهده",
+        "bookmarks.add" to "علاقه‌مندی: افزودن",
+        "bookmarks.delete" to "علاقه‌مندی: حذف",
+        "gallery.view" to "گالری: مشاهده",
+        "gallery.largePreview" to "گالری: نمایش بزرگ",
+        "copy.text" to "کپی: کپی متن",
+        "share.content" to "اشتراک‌گذاری: اشتراک محتوا",
+        "pdf.create" to "PDF: ایجاد خروجی",
+        "pdf.save" to "PDF: ذخیره خروجی",
+        "footnotes.view" to "پاورقی: مشاهده",
+        "footnotes.add" to "پاورقی: افزودن",
+        "footnotes.edit" to "پاورقی: ویرایش",
+        "footnotes.delete" to "پاورقی: حذف",
+        "footnoteSync.dictionary" to "پاورقی: همگام‌سازی با دیکشنری",
+        "appIntro.view" to "معرفی برنامه: مشاهده"
+    )
+
+    /** والد هر مجوز فرزند. اگر والد خاموش باشد، فرزند نیز مؤثرًا خاموش است. */
+    val permissionParents = mapOf(
+        "read.view" to "read", "read.navigate" to "read",
+        "search.basic" to "search", "advancedSearch.filters" to "advancedSearch",
+        "compare.view" to "compare", "training.rehearse" to "training",
+        "audio.play" to "audio", "tts.play" to "tts",
+        "notes.view" to "notes", "notes.add" to "notes", "notes.edit" to "notes", "notes.delete" to "notes",
+        "bookmarks.view" to "bookmarks", "bookmarks.add" to "bookmarks", "bookmarks.delete" to "bookmarks",
+        "gallery.view" to "gallery", "gallery.largePreview" to "gallery",
+        "copy.text" to "copy", "share.content" to "share",
+        "pdf.create" to "pdf", "pdf.save" to "pdf",
+        "footnotes.view" to "footnotes", "footnotes.add" to "footnotes",
+        "footnotes.edit" to "footnotes", "footnotes.delete" to "footnotes",
+        "footnoteSync.dictionary" to "footnotes",
+        "appIntro.view" to "appIntro"
     )
 
     data class SpecialUser(
@@ -71,6 +117,17 @@ object ViewerAccessPolicy {
         key !in setOf("copy", "share", "pdf", "appIntro")
     }
 
+    fun normalizedPermissions(input: Map<String, Boolean>): Map<String, Boolean> {
+        val defaults = defaultPermissions()
+        val result = defaults.toMutableMap()
+        input.forEach { (key, value) -> if (key in permissionLabels) result[key] = value }
+        // نسخه‌های قدیمی فقط والدها را داشتند؛ فرزندان جدید همان وضعیت والد را به ارث می‌برند.
+        permissionParents.forEach { (child, parent) ->
+            if (!input.containsKey(child)) result[child] = result[parent] == true
+        }
+        return result
+    }
+
     fun profileDefaults(profile: String): Map<String, Boolean> = when (profile) {
         PROFILE_TRAINING -> defaultPermissions() + mapOf("training" to true)
         PROFILE_COLLABORATOR -> defaultPermissions() + mapOf("copy" to true, "share" to false, "pdf" to false)
@@ -88,12 +145,17 @@ object ViewerAccessPolicy {
             if (!special.enabled) return emptyMap()
             val expiry = special.expiresAt
             if (expiry != null && expiry > 0L && System.currentTimeMillis() > expiry) return emptyMap()
-            return special.permissions
+            return normalizedPermissions(special.permissions)
         }
-        return getPublicPermissions(context)
+        return normalizedPermissions(getPublicPermissions(context))
     }
 
-    fun hasPermission(context: Context, key: String): Boolean = getEffectivePermissions(context)[key] == true
+    fun hasPermission(context: Context, key: String): Boolean {
+        val permissions = getEffectivePermissions(context)
+        if (key !in permissionLabels) return false
+        val parent = permissionParents[key]
+        return permissions[key] == true && (parent == null || permissions[parent] == true)
+    }
 
     internal fun setImportedPublicPermissions(context: Context, permissions: Map<String, Boolean>, version: Int) {
         val obj = JSONObject(); permissionLabels.keys.forEach { obj.put(it, permissions[it] == true) }
@@ -206,7 +268,7 @@ object ViewerAccessPolicy {
                 val id = o.optString("installationId").trim().uppercase(java.util.Locale.US)
                 if (id.isBlank()) return@mapNotNull null
                 val p = o.optJSONObject("permissions")
-                val perms = permissionLabels.keys.associateWith { p?.optBoolean(it, false) ?: false }
+                val perms = normalizedPermissions(permissionLabels.keys.associateWith { p?.optBoolean(it, false) ?: false })
                 SpecialUser(
                     installationId = id,
                     profile = o.optString("profile", PROFILE_CUSTOM),

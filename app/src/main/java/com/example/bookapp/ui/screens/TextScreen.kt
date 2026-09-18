@@ -71,6 +71,10 @@ fun TextScreen(
     onAddFootnote: suspend (term: String, explanation: String) -> Result<Unit> = { _, _ -> Result.failure(IllegalStateException("ذخیره پاورقی در دسترس نیست")) },
     onEditFootnote: (FootnoteEntity, term: String, explanation: String) -> Unit = { _, _, _ -> },
     onDeleteFootnote: (FootnoteEntity) -> Unit = {},
+    canViewFootnotes: Boolean = true,
+    canAddFootnote: Boolean = true,
+    canEditFootnote: Boolean = true,
+    canDeleteFootnote: Boolean = true,
     canAddFootnoteToDictionary: Boolean = true,
     onOpenSearch: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
@@ -414,7 +418,7 @@ fun TextScreen(
                 }
             }
 
-            if (sectionId != null) {
+            if (sectionId != null && canViewFootnotes) {
                 Spacer(Modifier.height(24.dp))
                 HorizontalDivider()
                 Spacer(Modifier.height(16.dp))
@@ -423,6 +427,9 @@ fun TextScreen(
                     onAdd = onAddFootnote,
                     onEdit = onEditFootnote,
                     onDelete = onDeleteFootnote,
+                    canAddFootnote = canAddFootnote,
+                    canEditFootnote = canEditFootnote,
+                    canDeleteFootnote = canDeleteFootnote,
                     onAddToDictionary = { fn ->
                         if (!canAddFootnoteToDictionary) {
                             statusMessage = "انتقال پاورقی به دیکشنری در سیاست دسترسی فعلی غیرفعال است."
@@ -681,6 +688,9 @@ private fun FootnotesSection(
     onEdit: (FootnoteEntity, term: String, explanation: String) -> Unit,
     onDelete: (FootnoteEntity) -> Unit,
     onAddToDictionary: (FootnoteEntity) -> Boolean = { false },
+    canAddFootnote: Boolean = true,
+    canEditFootnote: Boolean = true,
+    canDeleteFootnote: Boolean = true,
     canAddFootnoteToDictionary: Boolean = true,
     onJumpToText: (FootnoteEntity) -> Unit = {},
     saveError: String? = null
@@ -698,7 +708,7 @@ private fun FootnotesSection(
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
     ) {
         Text("پاورقی", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        TextButton(onClick = { editing = null; showDialog = true }) {
+        if (canAddFootnote) TextButton(onClick = { editing = null; showDialog = true }) {
             Icon(Icons.Filled.Add, contentDescription = null)
             Spacer(Modifier.width(4.dp))
             Text("افزودن پاورقی")
@@ -775,7 +785,7 @@ private fun FootnotesSection(
                             }
                         }
                     }
-                    IconButton(onClick = { editing = fn; showDialog = true }) {
+                    if (canEditFootnote) IconButton(onClick = { editing = fn; showDialog = true }) {
                         Icon(Icons.Filled.Label, contentDescription = "ویرایش پاورقی")
                     }
                     Column {
@@ -789,7 +799,7 @@ private fun FootnotesSection(
                                 Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "افزودن به فرهنگ لغت")
                             }
                         }
-                        IconButton(onClick = { onDelete(fn) }) {
+                        if (canDeleteFootnote) IconButton(onClick = { onDelete(fn) }) {
                             Icon(Icons.Filled.Delete, contentDescription = "حذف پاورقی")
                         }
                     }
@@ -855,6 +865,8 @@ private fun FootnotesSection(
                                     validationError = "ذخیره پاورقی انجام نشد: ${it.message ?: "خطای نامشخص"}"
                                 }
                             }
+                        } else if (!canEditFootnote) {
+                            validationError = "ویرایش پاورقی در سیاست دسترسی فعلی غیرفعال است."
                         } else {
                             onEdit(current, term.trim(), explanation.trim())
                             showDialog = false
@@ -889,6 +901,10 @@ fun TextPagerScreen(
     onAddFootnote: suspend (Long, String, String) -> Result<Unit> = { _, _, _ -> Result.failure(IllegalStateException("ذخیره پاورقی در دسترس نیست")) },
     onEditFootnote: (Long, com.example.bookapp.data.FootnoteEntity, String, String) -> Unit = { _, _, _, _ -> },
     onDeleteFootnote: (Long, com.example.bookapp.data.FootnoteEntity) -> Unit = { _, _ -> },
+    canViewFootnotes: Boolean = true,
+    canAddFootnote: Boolean = true,
+    canEditFootnote: Boolean = true,
+    canDeleteFootnote: Boolean = true,
     canAddFootnoteToDictionary: Boolean = true,
     fieldTitle: String? = null,
     taziehTitle: String? = null,
@@ -951,6 +967,10 @@ fun TextPagerScreen(
                     onDeleteFootnote(section.id, fn)
                     pagerScope.launch { pageFootnotes = footnotesForSection(section.id) }
                 },
+                canViewFootnotes = canViewFootnotes,
+                canAddFootnote = canAddFootnote,
+                canEditFootnote = canEditFootnote,
+                canDeleteFootnote = canDeleteFootnote,
                 canAddFootnoteToDictionary = canAddFootnoteToDictionary,
                 fieldTitle = fieldTitle,
                 taziehTitle = taziehTitle,

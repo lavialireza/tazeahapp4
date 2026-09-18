@@ -74,7 +74,7 @@ object ViewerAccessTransfer {
         val expiresAt = if (payload.isNull("expiresAt")) null else payload.optLong("expiresAt")
         require(expiresAt == null || expiresAt <= 0L || System.currentTimeMillis() <= expiresAt) { "تاریخ اعتبار این سیاست گذشته است." }
         val p = payload.getJSONObject("permissions")
-        val permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { p.optBoolean(it, false) }
+        val permissions = ViewerAccessPolicy.normalizedPermissions(ViewerAccessPolicy.permissionLabels.keys.associateWith { p.optBoolean(it, false) })
         val version = payload.optInt("policyVersion", 1)
         require(version > 0) { "نسخه سیاست نامعتبر است." }
         val prefs = context.getSharedPreferences("viewer_access_policy", Context.MODE_PRIVATE)
