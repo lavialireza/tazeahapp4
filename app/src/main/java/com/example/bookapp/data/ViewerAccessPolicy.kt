@@ -13,6 +13,10 @@ object ViewerAccessPolicy {
     const val PROFILE_PUBLIC = "public"
     const val PROFILE_TRAINING = "training"
     const val PROFILE_COLLABORATOR = "collaborator"
+    const val PROFILE_RESEARCHER = "researcher"
+    const val PROFILE_DIRECTOR = "director"
+    const val PROFILE_ACTOR = "actor"
+    const val PROFILE_READER = "reader"
     const val PROFILE_CUSTOM = "custom"
 
     val permissionLabels = linkedMapOf(
@@ -160,10 +164,19 @@ object ViewerAccessPolicy {
         return result
     }
 
-    fun profileDefaults(profile: String): Map<String, Boolean> = when (profile) {
-        PROFILE_TRAINING -> defaultPermissions() + mapOf("training" to true)
-        PROFILE_COLLABORATOR -> defaultPermissions() + mapOf("copy" to true, "share" to false, "pdf" to false)
-        else -> defaultPermissions()
+    fun profileDefaults(profile: String): Map<String, Boolean> {
+        val all = defaultPermissions().toMutableMap()
+        fun set(vararg pairs: Pair<String, Boolean>) { pairs.forEach { all[it.first] = it.second } }
+        return when (profile) {
+            PROFILE_PUBLIC -> all
+            PROFILE_TRAINING -> { set("training" to true, "training.rehearse" to true, "myRole" to true, "myRole.view" to true, "myRole.rehearse" to true); all }
+            PROFILE_COLLABORATOR -> { set("copy" to true, "copy.text" to true, "share" to false, "share.content" to false, "pdf" to false, "pdf.create" to false, "pdf.save" to false); all }
+            PROFILE_RESEARCHER -> { set("advancedSearch" to true, "advancedSearch.filters" to true, "compare" to true, "compare.view" to true, "footnotes" to true, "footnotes.view" to true, "footnotes.add" to true, "footnotes.edit" to true, "footnotes.delete" to true, "footnoteSync.dictionary" to true, "dictionary" to true, "dictionary.view" to true, "dictionary.add" to true, "dictionary.edit" to true, "dictionary.delete" to true, "taziehCorrections" to true, "taziehCorrections.view" to true, "taziehCorrections.add" to true, "taziehCorrections.edit" to true, "taziehCorrections.apply" to true); all }
+            PROFILE_DIRECTOR -> { set("gallery" to true, "gallery.view" to true, "gallery.add" to true, "gallery.edit" to true, "gallery.delete" to true, "gallery.largePreview" to true, "myRole" to true, "myRole.view" to true, "myRole.select" to true, "myRole.rehearse" to true, "myRole.pdf" to true, "pdf" to true, "pdf.create" to true, "pdf.save" to true, "share" to true, "share.content" to true); all }
+            PROFILE_ACTOR -> { set("myRole" to true, "myRole.view" to true, "myRole.select" to true, "myRole.remove" to true, "myRole.rehearse" to true, "audio" to true, "audio.play" to true, "tts" to true, "tts.play" to true, "notes" to true, "notes.view" to true, "notes.add" to true, "notes.edit" to true, "bookmarks" to true, "bookmarks.view" to true, "bookmarks.add" to true); all }
+            PROFILE_READER -> { set("read" to true, "read.view" to true, "read.navigate" to true, "search" to true, "search.basic" to true, "bookmarks" to true, "bookmarks.view" to true, "bookmarks.add" to true); all }
+            else -> all
+        }
     }
 
 
@@ -184,6 +197,12 @@ object ViewerAccessPolicy {
 
     fun hasPermission(context: Context, key: String): Boolean {
         val permissions = getEffectivePermissions(context)
+        if (key !in permissionLabels) return false
+        val parent = permissionParents[key]
+        return permissions[key] == true && (parent == null || permissions[parent] == true)
+    }
+
+    internal fun hasPermissionForTest(permissions: Map<String, Boolean>, key: String): Boolean {
         if (key !in permissionLabels) return false
         val parent = permissionParents[key]
         return permissions[key] == true && (parent == null || permissions[parent] == true)
