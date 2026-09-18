@@ -579,7 +579,7 @@ fun ViewerAccessManagementScreen(
                         Text("ابزارهای کنترل دسترسی", style = MaterialTheme.typography.titleMedium)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { showPermissionPreview = true }, Modifier.weight(1f)) { Text("پیش‌نمایش") }
-                            OutlinedButton(enabled = selectedUser != null, onClick = { showComparePolicies = true }, modifier = Modifier.weight(1f)) { Text("مقایسه سیاست") }
+                            OutlinedButton(enabled = selectedUser != null, onClick = { showComparePolicies = true }, Modifier.weight(1f)) { Text("مقایسه سیاست") }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { showDraftTest = true }, Modifier.weight(1f)) { Text("آزمون پیش از اعمال") }
@@ -677,6 +677,7 @@ fun ViewerAccessManagementScreen(
             confirmButton = { TextButton(onClick = { showAccessHistory = false }) { Text("بستن") } }
         )
     }
+}
 
     if (showComparePolicies && selectedUser != null) {
         val diffs = ViewerAccessPolicy.permissionLabels.keys.mapNotNull { key ->
@@ -738,7 +739,6 @@ fun ViewerAccessManagementScreen(
         )
     }
 
-    }
 private fun profileTitle(profile: String) = when (profile) {
     ViewerAccessPolicy.PROFILE_PUBLIC -> "عمومی"
     ViewerAccessPolicy.PROFILE_TRAINING -> "تمرینی"

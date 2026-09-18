@@ -474,8 +474,10 @@ fun AppNavigation(
                 onSyncContent = { syncRemoteContent(db) },
                 onCheckAppUpdate = {
                     val installed = com.example.bookapp.data.UpdateHelper.getInstalledVersion(context)
-                    com.example.bookapp.data.UpdateHelper.checkForUpdate(installed.buildNumber)
+                    val result = com.example.bookapp.data.UpdateHelper.checkForUpdate(installed.buildNumber)
+                    result
                 },
+                showUpdateManifestTools = !publicViewer,
                 db = db,
                 onBack = { navController.popBackStack() }
             )
