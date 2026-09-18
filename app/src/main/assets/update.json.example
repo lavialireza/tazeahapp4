@@ -1,11 +1,14 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "versionCode": 60,
-  "versionName": "6.45.7",
+  "versionName": "1.0-build60",
   "minSupportedVersion": 1,
   "forceUpdate": false,
   "releaseDate": "2026-09-18",
-  "releaseNotes": "Smart Update",
-  "adminApk": "app-admin-release.apk",
-  "viewerApk": "app-viewer-release.apk"
+  "releaseNotes": [
+    "نسخه جدید تعزیه استودیو",
+    "بروزرسانی داخلی برنامه"
+  ],
+  "adminApk": "app-admin-debug.apk",
+  "viewerApk": "app-viewer-debug.apk"
 }

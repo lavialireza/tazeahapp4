@@ -84,12 +84,22 @@ object UpdateHelper {
                         ?: Regex("^apk-build-(\\d+)$").find(tag)?.groupValues?.get(1)?.toIntOrNull()
                         ?: continue
                     if (buildNumber <= currentVersionCode || apkUrl == null) continue
-                    val apkName = manifest?.optString("apkFile").orEmpty()
-                    if (apkName.isNotBlank()) {
+                    // Manifest مشترک می‌تواند هر دو APK را معرفی کند؛ هر flavor فقط APK خودش را انتخاب می‌کند.
+                    val selectedApkName = if (viewer) {
+                        manifest?.optString("viewerApk").orEmpty()
+                            .ifBlank { manifest?.optString("apkFile").orEmpty() }
+                    } else {
+                        manifest?.optString("adminApk").orEmpty()
+                            .ifBlank { manifest?.optString("apkFile").orEmpty() }
+                    }
+                    if (selectedApkName.isNotBlank()) {
                         var exact: String? = null
                         for (j in 0 until assets.length()) {
                             val a = assets.getJSONObject(j)
-                            if (a.optString("name") == apkName) exact = a.optString("browser_download_url").takeIf { it.isNotBlank() }
+                            if (a.optString("name") == selectedApkName) {
+                                exact = a.optString("browser_download_url").takeIf { it.isNotBlank() }
+                                if (exact != null) break
+                            }
                         }
                         if (exact != null) apkUrl = exact
                     }
