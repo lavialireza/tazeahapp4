@@ -112,13 +112,35 @@ object ViewerAccessPolicy {
         enabled: Boolean = true
     ) {
         val id = installationId(context)
-        // پروفایل صادرشده از Admin نیز همراه سیاست منتقل می‌شود تا Viewer
-        // هنگام دریافت سیاست، پروفایل واقعی کاربر خاص را به «سفارشی» تبدیل نکند.
+        // هنگام دریافت سیاست فقط «بخش دسترسی» تغییر می‌کند؛ اطلاعات مدیریتی
+        // موجود روی Viewer (نام، تلفن، آدرس و...) نباید با سیاست جایگزین شود.
         val normalizedProfile = when (profile) {
             PROFILE_PUBLIC, PROFILE_TRAINING, PROFILE_COLLABORATOR, PROFILE_CUSTOM -> profile
             else -> PROFILE_CUSTOM
         }
-        upsertSpecialUser(context, SpecialUser(id, normalizedProfile, expiresAt, permissions, enabled = enabled))
+        val existing = getSpecialUsers(context).firstOrNull { it.installationId == id }
+        val imported = SpecialUser(
+            installationId = id,
+            profile = normalizedProfile,
+            expiresAt = expiresAt,
+            permissions = permissions,
+            displayName = existing?.displayName ?: "",
+            details = existing?.details ?: "",
+            phone = existing?.phone ?: "",
+            address = existing?.address ?: "",
+            position = existing?.position ?: "",
+            userType = existing?.userType ?: "",
+            otherDetails = existing?.otherDetails ?: "",
+            enabled = enabled,
+            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+            lastPolicySentAt = existing?.lastPolicySentAt ?: 0L,
+            lastPolicySentFingerprint = existing?.lastPolicySentFingerprint ?: "",
+            lastPolicySentVersion = existing?.lastPolicySentVersion ?: 0,
+            lastPolicyAppliedAt = existing?.lastPolicyAppliedAt ?: 0L,
+            lastPolicyAppliedVersion = existing?.lastPolicyAppliedVersion ?: 0
+        )
+        upsertSpecialUser(context, imported)
         check(getSpecialUsers(context).firstOrNull { it.installationId == id }?.profile == normalizedProfile) {
             "پروفایل کاربر خاص پس از اعمال سیاست قابل بازیابی نیست."
         }

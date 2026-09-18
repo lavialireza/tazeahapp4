@@ -197,28 +197,45 @@ fun SpecialUsersManagementScreen(onBack: () -> Unit) {
                                 if (user.position.isNotBlank()) Text("سمت: ${user.position}", style = MaterialTheme.typography.bodySmall)
                                 Text("نوع کاربری: ${user.userType.ifBlank { user.profile }}", style = MaterialTheme.typography.bodySmall)
                                 Text("ثبت: ${dateFormat.format(Date(user.createdAt))}", style = MaterialTheme.typography.bodySmall)
+                                val syncStatus = when {
+                                    ViewerAccessPolicy.policyNeedsResend(user) -> if (user.lastPolicySentAt > 0L) "نیاز به ارسال مجدد" else "ارسال نشده"
+                                    user.lastPolicyAppliedAt > 0L && user.lastPolicyAppliedVersion == user.lastPolicySentVersion -> "اعمال و همگام"
+                                    else -> "ارسال شده؛ منتظر تأیید Viewer"
+                                }
                                 Text(
-                                    when {
-                                        ViewerAccessPolicy.policyNeedsResend(user) -> if (user.lastPolicySentAt > 0L) "سیاست: تغییر کرده؛ نیاز به ارسال مجدد" else "سیاست: هنوز ارسال نشده"
-                                        else -> "سیاست: ارسال شده در ${dateFormat.format(Date(user.lastPolicySentAt))}"
+                                    "وضعیت سیاست: $syncStatus",
+                                    color = when (syncStatus) {
+                                        "اعمال و همگام" -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.error
                                     },
-                                    color = if (ViewerAccessPolicy.policyNeedsResend(user)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                Text(
-                                    if (user.lastPolicyAppliedAt > 0L) "Viewer: اعمال شد در ${dateTimeFormat.format(Date(user.lastPolicyAppliedAt))} (نسخه ${user.lastPolicyAppliedVersion})"
-                                    else "Viewer: هنوز تأیید دریافت/اعمال ارسال نشده است",
-                                    color = if (user.lastPolicyAppliedAt > 0L) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                                if (user.lastPolicySentAt > 0L) {
+                                    Text("آخرین ارسال: ${dateTimeFormat.format(Date(user.lastPolicySentAt))} — نسخه ${user.lastPolicySentVersion}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (user.lastPolicyAppliedAt > 0L) {
+                                    Text("تأیید Viewer: ${dateTimeFormat.format(Date(user.lastPolicyAppliedAt))} — نسخه ${user.lastPolicyAppliedVersion}", style = MaterialTheme.typography.bodySmall)
+                                }
                                 Spacer(Modifier.height(6.dp))
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     TextButton(onClick = {
-                                        val disabled = user.copy(enabled = false, permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { false })
-                                        ViewerAccessPolicy.upsertSpecialUser(context, disabled)
-                                        AccessAuditLog.record(context, "لغو فوری دسترسی", disabled, "دسترسی کاربر فوراً غیرفعال شد؛ برای اعمال روی Viewer باید سیاست جدید ارسال شود.")
-                                        reload(); message = "دسترسی «${user.displayName.ifBlank { user.installationId }}» لغو شد. برای اعمال در Viewer، سیاست جدید را ارسال کنید."
-                                    }) { Icon(Icons.Filled.Warning, null); Spacer(Modifier.width(3.dp)); Text("لغو دسترسی") }
+                                        runCatching {
+                                            val disabled = user.copy(enabled = false, permissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { false })
+                                            ViewerAccessPolicy.upsertSpecialUser(context, disabled)
+                                            val policyVersion = ViewerAccessPolicy.getPolicyVersion(context, disabled.installationId)
+                                            val uri = ViewerAccessTransfer.createShareUri(context, disabled.installationId)
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "application/json"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                setPackage("com.example.bookapp.viewer")
+                                            }
+                                            context.startActivity(intent)
+                                            val sent = ViewerAccessPolicy.markPolicySent(context, disabled.installationId, policyVersion) ?: disabled
+                                            AccessAuditLog.record(context, "لغو و ارسال فوری دسترسی", sent, "دسترسی غیرفعال شد و سیاست لغو برای Viewer ارسال شد؛ منتظر تأیید اعمال است.")
+                                            reload(); message = "دسترسی «${sent.displayName.ifBlank { sent.installationId }}» لغو و سیاست جدید ارسال شد؛ وضعیت تا دریافت تأیید Viewer «منتظر تأیید» است."
+                                        }.onFailure { message = "لغو/ارسال دسترسی ناموفق بود: ${it.message ?: "خطای نامشخص"}" }
+                                    }) { Icon(Icons.Filled.Warning, null); Spacer(Modifier.width(3.dp)); Text("لغو و ارسال فوری") }
                                     TextButton(onClick = { cloneDialog = user }) { Icon(Icons.Filled.ContentCopy, null); Spacer(Modifier.width(3.dp)); Text("کپی مجوزها") }
                                 }
                                 Spacer(Modifier.height(2.dp))
