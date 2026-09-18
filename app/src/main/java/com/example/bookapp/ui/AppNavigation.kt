@@ -2,6 +2,7 @@ package com.example.bookapp.ui
 
 import android.content.Intent
 import com.example.bookapp.BuildConfig
+import com.example.bookapp.data.ViewerPermissionEngine
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -123,9 +124,7 @@ fun AppNavigation(
     val navController: NavHostController = rememberNavController()
     fun featureEnabled(key: String): Boolean {
         if (!publicViewer) return true
-        val enabled = viewerPermissions[key] == true
-        val parent = ViewerAccessPolicy.permissionParents[key]
-        return enabled && (parent == null || viewerPermissions[parent] == true)
+        return ViewerPermissionEngine.can(context, key)
     }
     fun navigateIfAllowed(key: String, route: String) {
         if (featureEnabled(key)) navController.navigate(route)
