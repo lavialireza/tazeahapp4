@@ -47,6 +47,9 @@ fun TaziehGalleryScreen(
     onUpdateCaption: (TaziehImageItem, String) -> Unit,
     readOnly: Boolean = false,
     canAddImage: Boolean = !readOnly,
+    canDeleteImage: Boolean = !readOnly,
+    canEditCaption: Boolean = !readOnly,
+    canLargePreview: Boolean = true,
     errorMessage: String? = null,
     onBack: () -> Unit
 ) {
@@ -112,7 +115,7 @@ fun TaziehGalleryScreen(
                                     .fillMaxWidth()
                                     .height(180.dp)
                                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                                    .clickable { previewImage = image }
+                                    .clickable(enabled = canLargePreview) { previewImage = image }
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -123,12 +126,12 @@ fun TaziehGalleryScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clickable(enabled = !readOnly) {
+                                        .clickable(enabled = canEditCaption) {
                                             editingImage = image
                                             captionText = image.caption
                                         }
                                 )
-                                if (!readOnly) IconButton(onClick = { onDeleteImage(image) }, modifier = Modifier.size(28.dp)) {
+                                if (canDeleteImage) IconButton(onClick = { onDeleteImage(image) }, modifier = Modifier.size(28.dp)) {
                                     Icon(Icons.Filled.Delete, contentDescription = "حذف عکس")
                                 }
                             }
@@ -188,7 +191,7 @@ fun TaziehGalleryScreen(
     }
 
     val current = editingImage
-    if (current != null && !readOnly) {
+    if (current != null && canEditCaption) {
         AlertDialog(
             onDismissRequest = { editingImage = null },
             title = { Text("توضیح عکس") },

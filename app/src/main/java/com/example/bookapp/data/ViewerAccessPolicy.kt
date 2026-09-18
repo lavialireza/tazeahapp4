@@ -30,8 +30,11 @@ object ViewerAccessPolicy {
         "share" to "اشتراک‌گذاری",
         "pdf" to "PDF",
         "footnotes" to "پاورقی",
-        "footnoteSync" to "انتقال پاورقی به دیکشنری",
         "appIntro" to "معرفی برنامه",
+        "myRole" to "نقش من",
+        "dictionary" to "دیکشنری اصطلاحات تعزیه",
+        "taziehCorrections" to "دیکشنری اصلاحات تعزیه",
+        "calendar" to "تقویم محرم",
 
         // مجوزهای فرزند؛ هر قابلیت اصلی والد مستقل است و فرزندان جزئیات واقعی آن را کنترل می‌کنند.
         "read.view" to "مطالعه: مشاهده متن",
@@ -50,6 +53,9 @@ object ViewerAccessPolicy {
         "bookmarks.add" to "علاقه‌مندی: افزودن",
         "bookmarks.delete" to "علاقه‌مندی: حذف",
         "gallery.view" to "گالری: مشاهده",
+        "gallery.add" to "گالری: افزودن تصویر",
+        "gallery.edit" to "گالری: ویرایش توضیح تصویر",
+        "gallery.delete" to "گالری: حذف تصویر",
         "gallery.largePreview" to "گالری: نمایش بزرگ",
         "copy.text" to "کپی: کپی متن",
         "share.content" to "اشتراک‌گذاری: اشتراک محتوا",
@@ -60,7 +66,23 @@ object ViewerAccessPolicy {
         "footnotes.edit" to "پاورقی: ویرایش",
         "footnotes.delete" to "پاورقی: حذف",
         "footnoteSync.dictionary" to "پاورقی: همگام‌سازی با دیکشنری",
-        "appIntro.view" to "معرفی برنامه: مشاهده"
+        "appIntro.view" to "معرفی برنامه: مشاهده",
+        "myRole.view" to "نقش من: مشاهده نقش‌ها",
+        "myRole.select" to "نقش من: انتخاب نقش",
+        "myRole.remove" to "نقش من: حذف نقش انتخاب‌شده",
+        "myRole.rehearse" to "نقش من: تمرین",
+        "myRole.pdf" to "نقش من: خروجی PDF",
+        "dictionary.view" to "دیکشنری: مشاهده اصطلاحات",
+        "dictionary.add" to "دیکشنری: افزودن واژه",
+        "dictionary.edit" to "دیکشنری: ویرایش واژه",
+        "dictionary.delete" to "دیکشنری: حذف واژه",
+        "taziehCorrections.view" to "اصلاحات تعزیه: مشاهده",
+        "taziehCorrections.add" to "اصلاحات تعزیه: افزودن اصلاح",
+        "taziehCorrections.edit" to "اصلاحات تعزیه: ویرایش اصلاح",
+        "taziehCorrections.delete" to "اصلاحات تعزیه: حذف اصلاح",
+        "taziehCorrections.apply" to "اصلاحات تعزیه: اعمال اصلاح بر متن",
+        "calendar.view" to "تقویم محرم: مشاهده",
+        "calendar.suggestions" to "تقویم محرم: پیشنهاد تعزیه‌ها"
     )
 
     /** والد هر مجوز فرزند. اگر والد خاموش باشد، فرزند نیز مؤثرًا خاموش است. */
@@ -71,13 +93,19 @@ object ViewerAccessPolicy {
         "audio.play" to "audio", "tts.play" to "tts",
         "notes.view" to "notes", "notes.add" to "notes", "notes.edit" to "notes", "notes.delete" to "notes",
         "bookmarks.view" to "bookmarks", "bookmarks.add" to "bookmarks", "bookmarks.delete" to "bookmarks",
-        "gallery.view" to "gallery", "gallery.largePreview" to "gallery",
+        "gallery.view" to "gallery", "gallery.add" to "gallery", "gallery.edit" to "gallery", "gallery.delete" to "gallery", "gallery.largePreview" to "gallery",
         "copy.text" to "copy", "share.content" to "share",
         "pdf.create" to "pdf", "pdf.save" to "pdf",
         "footnotes.view" to "footnotes", "footnotes.add" to "footnotes",
         "footnotes.edit" to "footnotes", "footnotes.delete" to "footnotes",
         "footnoteSync.dictionary" to "footnotes",
-        "appIntro.view" to "appIntro"
+        "appIntro.view" to "appIntro",
+        "myRole.view" to "myRole", "myRole.select" to "myRole", "myRole.remove" to "myRole",
+        "myRole.rehearse" to "myRole", "myRole.pdf" to "myRole",
+        "dictionary.view" to "dictionary", "dictionary.add" to "dictionary", "dictionary.edit" to "dictionary", "dictionary.delete" to "dictionary",
+        "taziehCorrections.view" to "taziehCorrections", "taziehCorrections.add" to "taziehCorrections",
+        "taziehCorrections.edit" to "taziehCorrections", "taziehCorrections.delete" to "taziehCorrections", "taziehCorrections.apply" to "taziehCorrections",
+        "calendar.view" to "calendar", "calendar.suggestions" to "calendar"
     )
 
     data class SpecialUser(
@@ -121,6 +149,10 @@ object ViewerAccessPolicy {
         val defaults = defaultPermissions()
         val result = defaults.toMutableMap()
         input.forEach { (key, value) -> if (key in permissionLabels) result[key] = value }
+        // مهاجرت کلید قدیمی Stage53 به کلید جدید و دقیق‌تر.
+        if (!input.containsKey("footnoteSync.dictionary") && input.containsKey("footnoteSync")) {
+            result["footnoteSync.dictionary"] = input["footnoteSync"] == true
+        }
         // نسخه‌های قدیمی فقط والدها را داشتند؛ فرزندان جدید همان وضعیت والد را به ارث می‌برند.
         permissionParents.forEach { (child, parent) ->
             if (!input.containsKey(child)) result[child] = result[parent] == true

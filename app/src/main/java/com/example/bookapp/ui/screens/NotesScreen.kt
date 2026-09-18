@@ -22,7 +22,10 @@ fun NotesScreen(
     onAddNote: (title: String, content: String) -> Unit,
     onUpdateNote: (NoteEntity, title: String, content: String) -> Unit,
     onDeleteNote: (Long) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    canAdd: Boolean = true,
+    canEdit: Boolean = true,
+    canDelete: Boolean = true
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var editingNote by remember { mutableStateOf<NoteEntity?>(null) }
@@ -39,7 +42,7 @@ fun NotesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
+            if (canAdd) FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "یادداشت جدید")
             }
         }
@@ -58,7 +61,7 @@ fun NotesScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { editingNote = note }
+                            .clickable(enabled = canEdit) { editingNote = note }
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -73,7 +76,7 @@ fun NotesScreen(
                                     maxLines = 3
                                 )
                             }
-                            IconButton(onClick = { onDeleteNote(note.id) }) {
+                            if (canDelete) IconButton(onClick = { onDeleteNote(note.id) }) {
                                 Icon(Icons.Filled.Delete, contentDescription = "حذف")
                             }
                         }

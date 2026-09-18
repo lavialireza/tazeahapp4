@@ -62,6 +62,8 @@ fun TextScreen(
     canBookmark: Boolean = true,
     canAudio: Boolean = true,
     canTts: Boolean = true,
+    canCopy: Boolean = true,
+    canShare: Boolean = true,
     sectionId: Long? = null,
     audioUrl: String? = null,
     relatedSections: List<SearchResult> = emptyList(),
@@ -76,10 +78,16 @@ fun TextScreen(
     canEditFootnote: Boolean = true,
     canDeleteFootnote: Boolean = true,
     canAddFootnoteToDictionary: Boolean = true,
+    canBookmark: Boolean = true,
+    canAudio: Boolean = true,
+    canTts: Boolean = true,
+    canCopy: Boolean = true,
+    canShare: Boolean = true,
     onOpenSearch: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     hasPrevSection: Boolean = false,
     hasNextSection: Boolean = false,
+    canNavigate: Boolean = true,
     onPrevSection: () -> Unit = {},
     onNextSection: () -> Unit = {},
     onAttachAudio: (android.net.Uri) -> Unit = {},
@@ -279,18 +287,20 @@ fun TextScreen(
                                 onClick = { moreExpanded = false; showTagDialog = true }
                             )
                         }
-                        val canCopy = !com.example.bookapp.BuildConfig.PUBLIC_VIEWER || ViewerAccessPolicy.hasPermission(context, "copy")
-                        val canShare = !com.example.bookapp.BuildConfig.PUBLIC_VIEWER || ViewerAccessPolicy.hasPermission(context, "share")
-                        if (canCopy) {
+                        val copyAllowed = canCopy
+                        val shareAllowed = canShare
+                        if (copyAllowed) {
                             DropdownMenuItem(
                                 text = { Text("کپی متن") },
                                 onClick = { moreExpanded = false; copyToClipboard(context, title, content) }
                             )
-                            if (canShare) DropdownMenuItem(
+                        }
+                        if (shareAllowed) {
+                            DropdownMenuItem(
                                 text = { Text("اشتراک‌گذاری") },
                                 onClick = { moreExpanded = false; shareText(context, title, content) }
                             )
-                            if (sectionId != null && canShare) {
+                            if (sectionId != null) {
                                 DropdownMenuItem(
                                     text = { Text("اشتراک‌گذاری لینک مستقیم این بخش") },
                                     onClick = { moreExpanded = false; shareSectionLink(context, title, sectionId) }
@@ -406,7 +416,7 @@ fun TextScreen(
                 )
             }
 
-            if (hasPrevSection || hasNextSection) {
+            if (canNavigate && (hasPrevSection || hasNextSection)) {
                 Spacer(Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     OutlinedButton(onClick = onPrevSection, enabled = hasPrevSection) {
@@ -906,6 +916,12 @@ fun TextPagerScreen(
     canEditFootnote: Boolean = true,
     canDeleteFootnote: Boolean = true,
     canAddFootnoteToDictionary: Boolean = true,
+    canBookmark: Boolean = true,
+    canAudio: Boolean = true,
+    canTts: Boolean = true,
+    canCopy: Boolean = true,
+    canShare: Boolean = true,
+    canNavigate: Boolean = true,
     fieldTitle: String? = null,
     taziehTitle: String? = null,
     roleTitle: String? = null,
@@ -938,13 +954,14 @@ fun TextPagerScreen(
                 title = "${section.title}  (${page + 1}/${sections.size})",
                 content = section.content,
                 isBookmarked = isBookmarked(section.id),
-                onToggleBookmark = { onToggleBookmark(section.id) },
+                onToggleBookmark = { if (canBookmark) onToggleBookmark(section.id) },
                 sectionId = section.id,
                 audioUrl = section.audioUrl,
                 onOpenSearch = onOpenSearch,
                 onOpenSettings = onOpenSettings,
                 hasPrevSection = page > 0,
                 hasNextSection = page < sections.size - 1,
+                canNavigate = canNavigate,
                 onPrevSection = {
                     pagerScope.launch { pagerState.animateScrollToPage(page - 1) }
                 },
@@ -972,6 +989,12 @@ fun TextPagerScreen(
                 canEditFootnote = canEditFootnote,
                 canDeleteFootnote = canDeleteFootnote,
                 canAddFootnoteToDictionary = canAddFootnoteToDictionary,
+                canBookmark = canBookmark,
+                canAudio = canAudio,
+                canTts = canTts,
+                canCopy = canCopy,
+                canShare = canShare,
+                canNavigate = canNavigate,
                 fieldTitle = fieldTitle,
                 taziehTitle = taziehTitle,
                 roleTitle = roleTitle,

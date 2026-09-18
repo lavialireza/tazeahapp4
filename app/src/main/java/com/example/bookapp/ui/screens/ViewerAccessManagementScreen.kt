@@ -43,9 +43,10 @@ private val accessPermissionTrees = listOf(
     PermissionTree("مطالعه و جستجو", listOf("read", "search", "advancedSearch", "compare", "training")),
     PermissionTree("رسانه و نمایش", listOf("audio", "tts", "gallery")),
     PermissionTree("امکانات شخصی", listOf("notes", "bookmarks", "copy", "share")),
-    PermissionTree("امکانات پژوهشی", listOf("footnotes")),
+    PermissionTree("امکانات پژوهشی", listOf("footnotes", "dictionary", "taziehCorrections")),
+    PermissionTree("نقش و تمرین", listOf("myRole")),
     PermissionTree("خروجی", listOf("pdf")),
-    PermissionTree("اطلاعات برنامه", listOf("appIntro"))
+    PermissionTree("تقویم و اطلاعات", listOf("calendar", "appIntro"))
 )
 
 private val permissionChildren = mapOf(
@@ -58,12 +59,16 @@ private val permissionChildren = mapOf(
     "tts" to listOf("tts.play"),
     "notes" to listOf("notes.view", "notes.add", "notes.edit", "notes.delete"),
     "bookmarks" to listOf("bookmarks.view", "bookmarks.add", "bookmarks.delete"),
-    "gallery" to listOf("gallery.view", "gallery.largePreview"),
+    "gallery" to listOf("gallery.view", "gallery.add", "gallery.edit", "gallery.delete", "gallery.largePreview"),
     "copy" to listOf("copy.text"),
     "share" to listOf("share.content"),
     "pdf" to listOf("pdf.create", "pdf.save"),
     "footnotes" to listOf("footnotes.view", "footnotes.add", "footnotes.edit", "footnotes.delete", "footnoteSync.dictionary"),
-    "appIntro" to listOf("appIntro.view")
+    "appIntro" to listOf("appIntro.view"),
+    "myRole" to listOf("myRole.view", "myRole.select", "myRole.remove", "myRole.rehearse", "myRole.pdf"),
+    "dictionary" to listOf("dictionary.view", "dictionary.add", "dictionary.edit", "dictionary.delete"),
+    "taziehCorrections" to listOf("taziehCorrections.view", "taziehCorrections.add", "taziehCorrections.edit", "taziehCorrections.delete", "taziehCorrections.apply"),
+    "calendar" to listOf("calendar.view", "calendar.suggestions")
 )
 
 private fun permissionDescription(key: String): String = when (key) {
@@ -82,10 +87,14 @@ private fun permissionDescription(key: String): String = when (key) {
     "pdf" -> "والد خروجی PDF"
     "footnotes" -> "والد پاورقی؛ فرزندان آن مشاهده، افزودن، ویرایش، حذف و همگام‌سازی دیکشنری هستند"
     "appIntro" -> "والد معرفی برنامه"
+    "myRole" -> "والد نقش من؛ مدیریت نقش‌های انتخاب‌شده و عملیات مرتبط"
+    "dictionary" -> "والد دیکشنری اصطلاحات تعزیه"
+    "taziehCorrections" -> "والد دیکشنری اصلاحات تعزیه؛ مستقل از دیکشنری اصطلاحات"
+    "calendar" -> "والد تقویم محرم و پیشنهادهای مرتبط"
     else -> "قابلیت جزئی مستقل"
 }
 
-private val sensitivePermissionKeys = setOf("copy", "share", "pdf", "gallery", "training", "footnotes.delete", "notes.delete", "bookmarks.delete")
+private val sensitivePermissionKeys = setOf("copy", "share", "pdf", "gallery", "training", "footnotes.delete", "notes.delete", "bookmarks.delete", "myRole.remove", "dictionary.delete", "taziehCorrections.delete")
 
 private fun accessDateTime(value: Long): String =
     if (value <= 0L) "ثبت نشده"
@@ -99,7 +108,7 @@ private fun PermissionGroupEditor(
     searchQuery: String,
     compact: Boolean = false
 ) {
-    var expandedCategories by remember { mutableStateOf(if (compact) emptySet<String>() else accessPermissionTrees.map { it.categoryTitle }.toSet()) }
+    var expandedCategories by remember { mutableStateOf(emptySet<String>()) }
     var expandedParents by remember { mutableStateOf(emptySet<String>()) }
     val labels = ViewerAccessPolicy.permissionLabels
 
@@ -129,19 +138,19 @@ private fun PermissionGroupEditor(
                         Column(Modifier.weight(1f).clickable {
                             expandedCategories = if (categoryExpanded) expandedCategories - category.categoryTitle else expandedCategories + category.categoryTitle
                         }) {
-                            Text("والد گروه: ${category.categoryTitle}", style = MaterialTheme.typography.titleSmall)
-                            Text("قابلیت‌های والد فعال: $activeParents از ${parentKeys.size}", style = MaterialTheme.typography.bodySmall)
+                            Text("گروه: ${category.categoryTitle}", style = MaterialTheme.typography.titleSmall)
+                            Text("قابلیت‌های اصلی فعال: $activeParents از ${parentKeys.size}", style = MaterialTheme.typography.bodySmall)
                         }
                         Switch(
                             checked = allParents,
-                            onCheckedChange = { value -> onBulkChange(parentKeys, value) }
+                            onCheckedChange = { value -> onBulkChange(parentKeys + parentKeys.flatMap { permissionChildren[it].orEmpty() }, value) }
                         )
                     }
                     if (categoryExpanded) {
                         Spacer(Modifier.height(4.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = { onBulkChange(parentKeys, true) }) { Text("فعال کردن والدها") }
-                            TextButton(onClick = { onBulkChange(parentKeys, false) }) { Text("غیرفعال کردن والدها") }
+                            TextButton(onClick = { onBulkChange(parentKeys + parentKeys.flatMap { permissionChildren[it].orEmpty() }, true) }) { Text("فعال کردن والدها") }
+                            TextButton(onClick = { onBulkChange(parentKeys + parentKeys.flatMap { permissionChildren[it].orEmpty() }, false) }) { Text("غیرفعال کردن والدها") }
                         }
                         parentKeys.forEach { parentKey ->
                             val parentEnabled = permissions[parentKey] == true

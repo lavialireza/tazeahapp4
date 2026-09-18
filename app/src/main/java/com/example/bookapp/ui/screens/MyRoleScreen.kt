@@ -38,7 +38,10 @@ fun MyRoleScreen(
     onRemove: (MyRoleItem) -> Unit,
     onBack: () -> Unit,
     readOnly: Boolean = false,
-    showPdf: Boolean = true
+    showPdf: Boolean = true,
+    canRead: Boolean = true,
+    canRehearse: Boolean = true,
+    canRemove: Boolean = true
 ) {
     Scaffold(
         topBar = {
@@ -73,6 +76,9 @@ fun MyRoleScreen(
                         onRehearse = { onRehearse(item) },
                         onExportPdf = { onExportPdf(item) },
                         showPdf = showPdf,
+                        canRead = canRead,
+                        canRehearse = canRehearse,
+                        canRemove = canRemove,
                         onRemove = { onRemove(item) },
                         readOnly = readOnly
                     )
@@ -89,6 +95,9 @@ private fun MyRoleCard(
     onRehearse: () -> Unit,
     onExportPdf: () -> Unit,
     showPdf: Boolean = true,
+    canRead: Boolean = true,
+    canRehearse: Boolean = true,
+    canRemove: Boolean = true,
     onRemove: () -> Unit,
     readOnly: Boolean = false
 ) {
@@ -109,18 +118,18 @@ private fun MyRoleCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onRemove) {
+                if (canRemove) IconButton(onClick = onRemove) {
                     Icon(Icons.Filled.Close, contentDescription = "حذف از نقش من")
                 }
             }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onRead, modifier = Modifier.weight(1f)) {
+                if (canRead) OutlinedButton(onClick = onRead, modifier = Modifier.weight(1f)) {
                     Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("مطالعه")
                 }
-                OutlinedButton(onClick = onRehearse, modifier = Modifier.weight(1f)) {
+                if (canRehearse) OutlinedButton(onClick = onRehearse, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.School, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("تمرین")

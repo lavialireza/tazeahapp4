@@ -81,6 +81,7 @@ private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_VERSION = "version"
 private const val ROUTE_CHANGELOG = "changelog"
 private const val ROUTE_GLOSSARY = "glossary"
+private const val ROUTE_TAZIEH_CORRECTIONS = "tazieh_corrections"
 private const val ROUTE_MUHARRAM_CALENDAR = "muharram_calendar"
 private const val ROUTE_CONTENT_MANAGEMENT = "content_management"
 private const val ROUTE_VIEWER_ACCESS = "viewer_access"
@@ -222,12 +223,13 @@ fun AppNavigation(
                 onOpenBookmarks = { navigateIfAllowed("bookmarks", ROUTE_BOOKMARKS) },
                 onOpenNotes = { navigateIfAllowed("notes", ROUTE_NOTES) },
                 onOpenGallery = { navigateIfAllowed("gallery", ROUTE_ALL_IMAGES) },
-                onOpenMyRole = { navigateIfAllowed("read", ROUTE_MY_ROLE) },
+                onOpenMyRole = { navigateIfAllowed("myRole", ROUTE_MY_ROLE) },
                 onOpenAbout = { navController.navigate(ROUTE_ABOUT) },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
                 onOpenVersion = { navController.navigate(ROUTE_VERSION) },
                 onOpenChangelog = { navController.navigate(ROUTE_CHANGELOG) },
-                onOpenGlossary = { navController.navigate(ROUTE_GLOSSARY) },
+                onOpenGlossary = { navigateIfAllowed("dictionary.view", ROUTE_GLOSSARY) },
+                onOpenTaziehCorrections = { navigateIfAllowed("taziehCorrections.view", ROUTE_TAZIEH_CORRECTIONS) },
                 onOpenMuharramCalendar = { navController.navigate(ROUTE_MUHARRAM_CALENDAR) },
                 showContentManagement = !publicViewer,
                 onOpenContentManagement = { if (!publicViewer) navController.navigate(ROUTE_CONTENT_MANAGEMENT) },
@@ -250,7 +252,7 @@ fun AppNavigation(
             )
         }
 
-        if (featureEnabled("search")) composable(ROUTE_SEARCH) {
+        if (featureEnabled("search.basic")) composable(ROUTE_SEARCH) {
             var fields by remember { mutableStateOf(listOf<com.example.bookapp.data.FieldEntity>()) }
             var allTaziehs by remember { mutableStateOf(listOf<com.example.bookapp.data.TaziehEntity>()) }
             var allRoles by remember { mutableStateOf(listOf<com.example.bookapp.data.RoleEntity>()) }
@@ -277,9 +279,9 @@ fun AppNavigation(
                 onDialogueResultClick = { d -> navController.navigate("dialogue_reader/${d.dialogueId}") },
                 isBookmarked = { id -> id in bookmarkedIds },
                 showBookmarks = featureEnabled("bookmarks"),
-                advancedEnabled = featureEnabled("advancedSearch"),
+                advancedEnabled = featureEnabled("advancedSearch.filters"),
                 onToggleBookmark = { id ->
-                    if (featureEnabled("bookmarks")) {
+                    if (featureEnabled("bookmarks.add")) {
                         Prefs.toggleBookmark(context, id)
                         bookmarkedIds = Prefs.getBookmarks(context)
                     } else {
@@ -290,7 +292,7 @@ fun AppNavigation(
             )
         }
 
-        if (featureEnabled("bookmarks")) composable(ROUTE_BOOKMARKS) {
+        if (featureEnabled("bookmarks.view")) composable(ROUTE_BOOKMARKS) {
             var items by remember { mutableStateOf(listOf<SearchResult>()) }
             LaunchedEffect(Unit) {
                 val ids = Prefs.getBookmarks(context).toList()
@@ -299,11 +301,18 @@ fun AppNavigation(
             BookmarksScreen(
                 items = items,
                 onItemClick = { result -> navController.navigate("text/${result.sectionId}") },
+                onRemove = { result ->
+                    if (featureEnabled("bookmarks.delete")) {
+                        Prefs.toggleBookmark(context, result.sectionId)
+                        items = items.filterNot { it.sectionId == result.sectionId }
+                    }
+                },
+                canDelete = featureEnabled("bookmarks.delete"),
                 onBack = { navController.popBackStack() }
             )
         }
 
-        if (featureEnabled("notes")) composable(ROUTE_NOTES) {
+        if (featureEnabled("notes.view")) composable(ROUTE_NOTES) {
             var notes by remember { mutableStateOf(listOf<NoteEntity>()) }
             val scope = androidx.compose.runtime.rememberCoroutineScope()
             suspend fun reload() { notes = db.noteDao().getAll() }
@@ -330,11 +339,14 @@ fun AppNavigation(
                         reload()
                     }
                 },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                canAdd = featureEnabled("notes.add"),
+                canEdit = featureEnabled("notes.edit"),
+                canDelete = featureEnabled("notes.delete")
             )
         }
 
-        if (featureEnabled("read")) composable(ROUTE_MY_ROLE) {
+        if (featureEnabled("myRole.view")) composable(ROUTE_MY_ROLE) {
             var items by remember { mutableStateOf(listOf<MyRoleItem>()) }
             val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -373,11 +385,14 @@ fun AppNavigation(
                 },
                 onBack = { navController.popBackStack() },
                 readOnly = publicViewer,
-                showPdf = featureEnabled("pdf")
+                showPdf = featureEnabled("myRole.pdf") && featureEnabled("pdf"),
+                canRead = featureEnabled("myRole.view"),
+                canRehearse = featureEnabled("myRole.rehearse"),
+                canRemove = featureEnabled("myRole.remove")
             )
         }
 
-        if (featureEnabled("gallery")) composable(ROUTE_ALL_IMAGES) {
+        if (featureEnabled("gallery.view")) composable(ROUTE_ALL_IMAGES) {
             var images by remember { mutableStateOf(listOf<GalleryImageItem>()) }
             LaunchedEffect(Unit) {
                 val taziehs = db.taziehDao().getAll()
@@ -393,7 +408,7 @@ fun AppNavigation(
             )
         }
 
-        if (featureEnabled("training")) composable(ROUTE_REHEARSAL) { backStackEntry ->
+        if (featureEnabled("training.rehearse")) composable(ROUTE_REHEARSAL) { backStackEntry ->
             val roleId = backStackEntry.arguments?.getString("roleId")?.toLongOrNull() ?: 0L
             val roleTitle = backStackEntry.arguments?.getString("roleTitle") ?: ""
             var sections by remember { mutableStateOf(listOf<SectionEntity>()) }
@@ -491,11 +506,26 @@ fun AppNavigation(
             )
         }
 
-        composable(ROUTE_GLOSSARY) {
-            GlossaryScreen(onBack = { navController.popBackStack() })
+        if (featureEnabled("dictionary.view")) composable(ROUTE_GLOSSARY) {
+            GlossaryScreen(
+                onBack = { navController.popBackStack() },
+                canAdd = featureEnabled("dictionary.add"),
+                canEdit = featureEnabled("dictionary.edit"),
+                canDelete = featureEnabled("dictionary.delete")
+            )
         }
 
-        composable(ROUTE_MUHARRAM_CALENDAR) {
+        if (featureEnabled("taziehCorrections.view")) composable(ROUTE_TAZIEH_CORRECTIONS) {
+            TaziehCorrectionsScreen(
+                onBack = { navController.popBackStack() },
+                canAdd = featureEnabled("taziehCorrections.add"),
+                canEdit = featureEnabled("taziehCorrections.edit"),
+                canDelete = featureEnabled("taziehCorrections.delete"),
+                canApply = featureEnabled("taziehCorrections.apply")
+            )
+        }
+
+        if (featureEnabled("calendar.view")) composable(ROUTE_MUHARRAM_CALENDAR) {
             var suggestions by remember { mutableStateOf(listOf<MuharramTaziehSuggestion>()) }
             val countdowns = remember { com.example.bookapp.data.computeMuharramCountdowns() }
             val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -514,6 +544,7 @@ fun AppNavigation(
             MuharramCalendarScreen(
                 countdowns = countdowns,
                 suggestions = suggestions,
+                showSuggestions = featureEnabled("calendar.suggestions"),
                 onOpenTazieh = { taziehId ->
                     scope.launch {
                         val tazieh = db.taziehDao().getById(taziehId)
@@ -824,7 +855,7 @@ fun AppNavigation(
             )
         }
 
-        if (featureEnabled("read")) composable(ROUTE_FIELDS) {
+        if (featureEnabled("read.view")) composable(ROUTE_FIELDS) {
             var fields by remember { mutableStateOf(emptyList<FieldCatalogItem>()) }
             LaunchedEffect(Unit) {
                 val allFields = db.fieldDao().getAll()
@@ -843,7 +874,7 @@ fun AppNavigation(
             )
         }
 
-        if (featureEnabled("read")) composable(ROUTE_TAZIEHS) { backStackEntry ->
+        if (featureEnabled("read.view")) composable(ROUTE_TAZIEHS) { backStackEntry ->
             val fieldId = backStackEntry.arguments?.getString("fieldId")?.toLongOrNull() ?: 0L
             var catalog by remember { mutableStateOf(emptyList<TaziehCatalogItem>()) }
             LaunchedEffect(fieldId) {
@@ -860,14 +891,14 @@ fun AppNavigation(
                 initialFieldId = fieldId,
                 onOpen = { item -> navController.navigate("roles/${item.id}/${java.net.URLEncoder.encode(item.title, "UTF-8")}") },
                 onOpenGallery = { item ->
-                    if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/${item.id}")
+                    if (featureEnabled("gallery.view")) navController.navigate("tazieh_gallery/${item.id}")
                 },
-                showGallery = featureEnabled("gallery"),
+                showGallery = featureEnabled("gallery.view"),
                 onBack = { navController.popBackStack() }
             )
         }
 
-        if (featureEnabled("read")) composable(ROUTE_ROLES) { backStackEntry ->
+        if (featureEnabled("read.view")) composable(ROUTE_ROLES) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             val taziehTitle = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("taziehTitle") ?: "", "UTF-8")
             var roles by remember { mutableStateOf(listOf<com.example.bookapp.data.RoleEntity>()) }
@@ -896,20 +927,23 @@ fun AppNavigation(
                 items = roleItems,
                 onOpen = { item -> navController.navigate("sections/${item.id}/${item.title}") },
                 onSetMine = { item ->
-                    Prefs.setMyRole(context, taziehId, item.id)
-                    myRoleId = item.id
-                    scope.launch { reloadRoles() }
+                    if (featureEnabled("myRole.select")) {
+                        Prefs.setMyRole(context, taziehId, item.id)
+                        myRoleId = item.id
+                        scope.launch { reloadRoles() }
+                    }
                 },
                 onCompare = { navController.navigate("compare/$taziehId") },
-                onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId") },
-                showGallery = featureEnabled("gallery"),
+                onOpenGallery = { if (featureEnabled("gallery.view")) navController.navigate("tazieh_gallery/$taziehId") },
+                showGallery = featureEnabled("gallery.view"),
                 onBack = { navController.popBackStack() },
                 readOnly = publicViewer,
-                showCompare = featureEnabled("compare")
+                showCompare = featureEnabled("compare.view"),
+                canSelectMine = featureEnabled("myRole.select")
             )
         }
 
-        if (featureEnabled("read")) composable(ROUTE_TAZIEH_INDEX) { backStackEntry ->
+        if (featureEnabled("read.view")) composable(ROUTE_TAZIEH_INDEX) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             val taziehTitle = backStackEntry.arguments?.getString("taziehTitle") ?: ""
             var indexItems by remember { mutableStateOf(listOf<TaziehIndexItem>()) }
@@ -948,9 +982,9 @@ fun AppNavigation(
                         com.example.bookapp.data.exportTaziehToPdf(context, taziehTitle, rolesWithSections)
                     }
                 },
-                onOpenGallery = { if (featureEnabled("gallery")) navController.navigate("tazieh_gallery/$taziehId") },
-                showGallery = featureEnabled("gallery"),
-                showPdf = featureEnabled("pdf"),
+                onOpenGallery = { if (featureEnabled("gallery.view")) navController.navigate("tazieh_gallery/$taziehId") },
+                showGallery = featureEnabled("gallery.view"),
+                showPdf = featureEnabled("pdf.create") && featureEnabled("pdf.save"),
                 onRename = { item, newTitle ->
                     scope.launch {
                         db.roleDao().updateTitle(item.roleId, newTitle)
@@ -1133,7 +1167,7 @@ fun AppNavigation(
             }
         }
 
-        if (featureEnabled("gallery")) composable(ROUTE_TAZIEH_GALLERY) { backStackEntry ->
+        if (featureEnabled("gallery.view")) composable(ROUTE_TAZIEH_GALLERY) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             var taziehTitle by remember { mutableStateOf("تعزیه") }
             var images by remember { mutableStateOf(listOf<TaziehImageItem>()) }
@@ -1172,26 +1206,29 @@ fun AppNavigation(
                     }
                 },
                 onDeleteImage = { image ->
-                    scope.launch {
+                    if (featureEnabled("gallery.delete")) scope.launch {
                         db.taziehImageDao().delete(image.id)
                         com.example.bookapp.data.deleteImageFromAppStorage(image.filePath)
                         reloadImages()
                     }
                 },
                 onUpdateCaption = { image, caption ->
-                    scope.launch {
+                    if (featureEnabled("gallery.edit")) scope.launch {
                         db.taziehImageDao().updateCaption(image.id, caption)
                         reloadImages()
                     }
                 },
                 readOnly = publicViewer,
-                canAddImage = featureEnabled("gallery"),
+                canAddImage = featureEnabled("gallery.add"),
+                canDeleteImage = featureEnabled("gallery.delete"),
+                canEditCaption = featureEnabled("gallery.edit"),
+                canLargePreview = featureEnabled("gallery.largePreview"),
                 errorMessage = galleryError,
                 onBack = { navController.popBackStack() }
             )
         }
 
-        if (featureEnabled("compare")) composable(ROUTE_COMPARE) { backStackEntry ->
+        if (featureEnabled("compare.view")) composable(ROUTE_COMPARE) { backStackEntry ->
             val taziehId = backStackEntry.arguments?.getString("taziehId")?.toLongOrNull() ?: 0L
             var taziehTitle by remember { mutableStateOf("") }
             var roles by remember { mutableStateOf(listOf<com.example.bookapp.data.RoleEntity>()) }
@@ -1216,7 +1253,7 @@ fun AppNavigation(
             )
         }
 
-        if (featureEnabled("read")) composable(ROUTE_SECTIONS) { backStackEntry ->
+        if (featureEnabled("read.view")) composable(ROUTE_SECTIONS) { backStackEntry ->
             val roleId = backStackEntry.arguments?.getString("roleId")?.toLongOrNull() ?: 0L
             val roleTitle = backStackEntry.arguments?.getString("roleTitle") ?: ""
             var items by remember { mutableStateOf(listOf<ListItemData>()) }
@@ -1257,7 +1294,7 @@ fun AppNavigation(
                                 }
                             )
                         }
-                        if (featureEnabled("pdf")) {
+                        if (featureEnabled("pdf.create") && featureEnabled("pdf.save")) {
                             Spacer(Modifier.height(10.dp))
                             androidx.compose.material3.ExtendedFloatingActionButton(
                                 text = { androidx.compose.material3.Text("خروجی PDF") },
@@ -1275,7 +1312,7 @@ fun AppNavigation(
             )
         }
 
-        if (featureEnabled("read")) composable(ROUTE_TEXT_PAGER) { backStackEntry ->
+        if (featureEnabled("read.view")) composable(ROUTE_TEXT_PAGER) { backStackEntry ->
             val roleId = backStackEntry.arguments?.getString("roleId")?.toLongOrNull() ?: 0L
             val startIndex = backStackEntry.arguments?.getString("startIndex")?.toIntOrNull() ?: 0
             var sections by remember { mutableStateOf(listOf<SectionEntity>()) }
@@ -1347,7 +1384,12 @@ fun AppNavigation(
                     canAddFootnote = featureEnabled("footnotes.add"),
                     canEditFootnote = featureEnabled("footnotes.edit"),
                     canDeleteFootnote = featureEnabled("footnotes.delete"),
-                    canAddFootnoteToDictionary = featureEnabled("footnoteSync.dictionary"),
+                    canAddFootnoteToDictionary = featureEnabled("footnoteSync.dictionary") && featureEnabled("dictionary.add"),
+                    canBookmark = featureEnabled("bookmarks.add"),
+                    canAudio = featureEnabled("audio.play"),
+                    canTts = featureEnabled("tts.play"),
+                    canCopy = featureEnabled("copy.text"),
+                    canShare = featureEnabled("share.content"),
                     fieldTitle = breadcrumb.first,
                     taziehTitle = breadcrumb.second,
                     roleTitle = breadcrumb.third,
@@ -1356,7 +1398,7 @@ fun AppNavigation(
             }
         }
 
-        if (featureEnabled("read")) composable(ROUTE_TEXT) { backStackEntry ->
+        if (featureEnabled("read.view")) composable(ROUTE_TEXT) { backStackEntry ->
             val sectionId = backStackEntry.arguments?.getString("sectionId")?.toLongOrNull() ?: 0L
             var title by remember { mutableStateOf("") }
             var content by remember { mutableStateOf("") }
@@ -1395,10 +1437,13 @@ fun AppNavigation(
                 title = title,
                 content = content,
                 isBookmarked = bookmarked,
-                onToggleBookmark = { if (featureEnabled("bookmarks")) bookmarked = Prefs.toggleBookmark(context, sectionId) },
-                canBookmark = featureEnabled("bookmarks"),
-                canAudio = featureEnabled("audio"),
-                canTts = featureEnabled("tts"),
+                onToggleBookmark = { if (featureEnabled("bookmarks.add")) bookmarked = Prefs.toggleBookmark(context, sectionId) },
+                canBookmark = featureEnabled("bookmarks.add"),
+                canAudio = featureEnabled("audio.play"),
+                canTts = featureEnabled("tts.play"),
+                canCopy = featureEnabled("copy.text"),
+                canShare = featureEnabled("share.content"),
+                canNavigate = featureEnabled("read.navigate"),
                 sectionId = sectionId,
                 audioUrl = sectionAudioUrl,
                 relatedSections = relatedSections,
@@ -1408,7 +1453,7 @@ fun AppNavigation(
                 canAddFootnote = featureEnabled("footnotes.add"),
                 canEditFootnote = featureEnabled("footnotes.edit"),
                 canDeleteFootnote = featureEnabled("footnotes.delete"),
-                canAddFootnoteToDictionary = featureEnabled("footnoteSync.dictionary"),
+                canAddFootnoteToDictionary = featureEnabled("footnoteSync.dictionary") && featureEnabled("dictionary.add"),
                 saveError = footnoteError,
                 onAddFootnote = { term, explanation ->
                     if (!featureEnabled("footnotes.add")) {

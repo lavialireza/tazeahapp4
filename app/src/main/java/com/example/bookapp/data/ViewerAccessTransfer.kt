@@ -74,7 +74,12 @@ object ViewerAccessTransfer {
         val expiresAt = if (payload.isNull("expiresAt")) null else payload.optLong("expiresAt")
         require(expiresAt == null || expiresAt <= 0L || System.currentTimeMillis() <= expiresAt) { "تاریخ اعتبار این سیاست گذشته است." }
         val p = payload.getJSONObject("permissions")
-        val permissions = ViewerAccessPolicy.normalizedPermissions(ViewerAccessPolicy.permissionLabels.keys.associateWith { p.optBoolean(it, false) })
+        val rawPermissions = ViewerAccessPolicy.permissionLabels.keys.associateWith { p.optBoolean(it, false) }.toMutableMap()
+        // سازگاری با سیاست‌های Stage53 که از کلید قدیمی footnoteSync استفاده می‌کردند.
+        if (!p.has("footnoteSync.dictionary") && p.has("footnoteSync")) {
+            rawPermissions["footnoteSync"] = p.optBoolean("footnoteSync", false)
+        }
+        val permissions = ViewerAccessPolicy.normalizedPermissions(rawPermissions)
         val version = payload.optInt("policyVersion", 1)
         require(version > 0) { "نسخه سیاست نامعتبر است." }
         val prefs = context.getSharedPreferences("viewer_access_policy", Context.MODE_PRIVATE)

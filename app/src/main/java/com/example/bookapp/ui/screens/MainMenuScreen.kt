@@ -47,6 +47,7 @@ fun MainMenuScreen(
     onOpenVersion: () -> Unit,
     onOpenChangelog: () -> Unit,
     onOpenGlossary: () -> Unit,
+    onOpenTaziehCorrections: () -> Unit,
     onOpenMuharramCalendar: () -> Unit,
     showContentManagement: Boolean,
     onOpenContentManagement: () -> Unit,
@@ -104,19 +105,19 @@ fun MainMenuScreen(
 
             Spacer(Modifier.height(14.dp))
 
-            if (featureEnabled("read")) MenuCard("لیست تعزیه‌ها", Icons.Filled.List, onOpenTaziehList, accentColor = TaziehGreen)
+            if (featureEnabled("read.view")) MenuCard("لیست تعزیه‌ها", Icons.Filled.List, onOpenTaziehList, accentColor = TaziehGreen)
             Spacer(Modifier.height(10.dp))
-            if (featureEnabled("search")) MenuCard("جستجو", Icons.Filled.Search, onOpenSearch)
+            if (featureEnabled("search.basic")) MenuCard("جستجو", Icons.Filled.Search, onOpenSearch)
             Spacer(Modifier.height(10.dp))
-            if (featureEnabled("bookmarks")) MenuCard("علاقه‌مندی‌ها", Icons.Filled.Favorite, onOpenBookmarks)
+            if (featureEnabled("bookmarks.view")) MenuCard("علاقه‌مندی‌ها", Icons.Filled.Favorite, onOpenBookmarks)
             Spacer(Modifier.height(10.dp))
-            if (featureEnabled("notes")) MenuCard("دفتر یادداشت", Icons.Filled.Edit, onOpenNotes)
+            if (featureEnabled("notes.view")) MenuCard("دفتر یادداشت", Icons.Filled.Edit, onOpenNotes)
             Spacer(Modifier.height(10.dp))
-            if (featureEnabled("gallery")) MenuCard("گالری تصاویر", Icons.Filled.PhotoLibrary, onOpenGallery)
+            if (featureEnabled("gallery.view")) MenuCard("گالری تصاویر", Icons.Filled.PhotoLibrary, onOpenGallery)
             Spacer(Modifier.height(10.dp))
-            if (featureEnabled("read")) MenuCard("نقش من", Icons.Filled.School, onOpenMyRole, accentColor = TaziehGreen)
+            if (featureEnabled("myRole.view")) MenuCard("نقش من", Icons.Filled.School, onOpenMyRole, accentColor = TaziehGreen)
             Spacer(Modifier.height(10.dp))
-            MenuCard("درباره برنامه", Icons.Filled.Info, onOpenAbout)
+            if (featureEnabled("appIntro.view")) MenuCard("درباره برنامه", Icons.Filled.Info, onOpenAbout)
             Spacer(Modifier.height(10.dp))
             MenuCard("تنظیمات", Icons.Filled.Settings, onOpenSettings)
             Spacer(Modifier.height(10.dp))
@@ -140,9 +141,10 @@ fun MainMenuScreen(
             Spacer(Modifier.height(10.dp))
             MenuCard("چه چیزی جدید است؟", null, onOpenChangelog)
             Spacer(Modifier.height(10.dp))
-            MenuCard("دیکشنری اصطلاحات تعزیه", Icons.AutoMirrored.Filled.MenuBook, onOpenGlossary)
+            if (featureEnabled("dictionary.view")) MenuCard("دیکشنری اصطلاحات تعزیه", Icons.AutoMirrored.Filled.MenuBook, onOpenGlossary)
+            if (featureEnabled("taziehCorrections.view")) MenuCard("دیکشنری اصلاحات تعزیه", Icons.AutoMirrored.Filled.MenuBook, onOpenTaziehCorrections)
             Spacer(Modifier.height(10.dp))
-            MenuCard("تقویم محرم", null, onOpenMuharramCalendar)
+            if (featureEnabled("calendar.view")) MenuCard("تقویم محرم", null, onOpenMuharramCalendar)
 
             if (recentItems.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))

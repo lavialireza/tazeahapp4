@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,7 +19,9 @@ import com.example.bookapp.data.SearchResult
 fun BookmarksScreen(
     items: List<SearchResult>,
     onItemClick: (SearchResult) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onRemove: (SearchResult) -> Unit = {},
+    canDelete: Boolean = true
 ) {
     Scaffold(
         topBar = {
@@ -42,6 +45,7 @@ fun BookmarksScreen(
                     ListItem(
                         headlineContent = { Text(r.sectionTitle) },
                         supportingContent = { Text("${r.fieldTitle} ← ${r.taziehTitle} ← ${r.roleTitle}") },
+                        trailingContent = { if (canDelete) IconButton(onClick = { onRemove(r) }) { Icon(Icons.Filled.Delete, "حذف از علاقه‌مندی‌ها") } },
                         modifier = Modifier.clickable { onItemClick(r) }
                     )
                     HorizontalDivider()

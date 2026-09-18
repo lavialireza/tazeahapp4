@@ -25,7 +25,8 @@ fun MuharramCalendarScreen(
     countdowns: List<MuharramCountdown>?,
     suggestions: List<MuharramTaziehSuggestion>,
     onOpenTazieh: (Long) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    showSuggestions: Boolean = true
 ) {
     Scaffold(
         topBar = {
