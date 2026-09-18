@@ -278,7 +278,7 @@ fun AppNavigation(
                 onSearchDialogues = { query -> db.searchDao().searchDialogues(query) },
                 onDialogueResultClick = { d -> navController.navigate("dialogue_reader/${d.dialogueId}") },
                 isBookmarked = { id -> id in bookmarkedIds },
-                showBookmarks = featureEnabled("bookmarks"),
+                showBookmarks = featureEnabled("bookmarks.view"),
                 advancedEnabled = featureEnabled("advancedSearch.filters"),
                 onToggleBookmark = { id ->
                     if (featureEnabled("bookmarks.add")) {
@@ -1386,6 +1386,7 @@ fun AppNavigation(
                     canDeleteFootnote = featureEnabled("footnotes.delete"),
                     canAddFootnoteToDictionary = featureEnabled("footnoteSync.dictionary") && featureEnabled("dictionary.add"),
                     canBookmark = featureEnabled("bookmarks.add"),
+                    canBookmarkDelete = featureEnabled("bookmarks.delete"),
                     canAudio = featureEnabled("audio.play"),
                     canTts = featureEnabled("tts.play"),
                     canCopy = featureEnabled("copy.text"),
@@ -1437,7 +1438,10 @@ fun AppNavigation(
                 title = title,
                 content = content,
                 isBookmarked = bookmarked,
-                onToggleBookmark = { if (featureEnabled("bookmarks.add")) bookmarked = Prefs.toggleBookmark(context, sectionId) },
+                onToggleBookmark = {
+                    if (bookmarked && featureEnabled("bookmarks.delete")) bookmarked = Prefs.toggleBookmark(context, sectionId)
+                    else if (!bookmarked && featureEnabled("bookmarks.add")) bookmarked = Prefs.toggleBookmark(context, sectionId)
+                },
                 canBookmark = featureEnabled("bookmarks.add"),
                 canAudio = featureEnabled("audio.play"),
                 canTts = featureEnabled("tts.play"),

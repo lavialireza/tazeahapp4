@@ -88,7 +88,7 @@ private fun permissionDescription(key: String): String = when (key) {
     "footnotes" -> "والد پاورقی؛ فرزندان آن مشاهده، افزودن، ویرایش، حذف و همگام‌سازی دیکشنری هستند"
     "appIntro" -> "والد معرفی برنامه"
     "myRole" -> "والد نقش من؛ مدیریت نقش‌های انتخاب‌شده و عملیات مرتبط"
-    "dictionary" -> "والد دیکشنری اصطلاحات تعزیه"
+    "dictionary" -> "والد دیکشنری اصطلاحات تعزیه؛ فرزندان: مشاهده، افزودن، ویرایش، حذف"
     "taziehCorrections" -> "والد دیکشنری اصلاحات تعزیه؛ مستقل از دیکشنری اصطلاحات"
     "calendar" -> "والد تقویم محرم و پیشنهادهای مرتبط"
     else -> "قابلیت جزئی مستقل"
@@ -108,8 +108,8 @@ private fun PermissionGroupEditor(
     searchQuery: String,
     compact: Boolean = false
 ) {
-    var expandedCategories by remember { mutableStateOf(emptySet<String>()) }
-    var expandedParents by remember { mutableStateOf(emptySet<String>()) }
+    var expandedCategories by remember { mutableStateOf(setOf("امکانات پژوهشی")) }
+    var expandedParents by remember { mutableStateOf(setOf("dictionary")) }
     val labels = ViewerAccessPolicy.permissionLabels
 
     val visible = accessPermissionTrees.mapNotNull { category ->

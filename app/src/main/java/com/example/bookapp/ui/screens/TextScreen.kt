@@ -60,6 +60,7 @@ fun TextScreen(
     isBookmarked: Boolean,
     onToggleBookmark: () -> Unit,
     canBookmark: Boolean = true,
+    canBookmarkDelete: Boolean = true,
     canAudio: Boolean = true,
     canTts: Boolean = true,
     canCopy: Boolean = true,
@@ -244,7 +245,7 @@ fun TextScreen(
                             contentDescription = if (isSpeaking) "توقف خواندن" else if (!audioUrl.isNullOrBlank()) "پخش صدای واقعی" else "خواندن صوتی"
                         )
                     }
-                    if (canBookmark) IconButton(onClick = onToggleBookmark) {
+                    if ((isBookmarked && canBookmarkDelete) || (!isBookmarked && canBookmark)) IconButton(onClick = onToggleBookmark) {
                         Icon(
                             if (isBookmarked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = "نشان کردن"
@@ -912,6 +913,7 @@ fun TextPagerScreen(
     canDeleteFootnote: Boolean = true,
     canAddFootnoteToDictionary: Boolean = true,
     canBookmark: Boolean = true,
+    canBookmarkDelete: Boolean = true,
     canAudio: Boolean = true,
     canTts: Boolean = true,
     canCopy: Boolean = true,
@@ -949,7 +951,7 @@ fun TextPagerScreen(
                 title = "${section.title}  (${page + 1}/${sections.size})",
                 content = section.content,
                 isBookmarked = isBookmarked(section.id),
-                onToggleBookmark = { if (canBookmark) onToggleBookmark(section.id) },
+                onToggleBookmark = { if ((isBookmarked(section.id) && canBookmarkDelete) || (!isBookmarked(section.id) && canBookmark)) onToggleBookmark(section.id) },
                 sectionId = section.id,
                 audioUrl = section.audioUrl,
                 onOpenSearch = onOpenSearch,
@@ -985,6 +987,7 @@ fun TextPagerScreen(
                 canDeleteFootnote = canDeleteFootnote,
                 canAddFootnoteToDictionary = canAddFootnoteToDictionary,
                 canBookmark = canBookmark,
+                canBookmarkDelete = canBookmarkDelete,
                 canAudio = canAudio,
                 canTts = canTts,
                 canCopy = canCopy,

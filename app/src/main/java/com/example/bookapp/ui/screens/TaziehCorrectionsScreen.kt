@@ -34,7 +34,7 @@ fun TaziehCorrectionsScreen(
     val filtered = items.filter { query.isBlank() || it.original.contains(query, true) || it.corrected.contains(query, true) || it.explanation.contains(query, true) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("دیکشنری اصلاحات تعزیه") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت") } }) },
+        topBar = { TopAppBar(title = { Text("دیکشنری اصلاح و تصحیح متن تعزیه") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت") } }) },
         floatingActionButton = { if (canAdd) FloatingActionButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, "افزودن اصلاح") } }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {

@@ -33,7 +33,7 @@ object ViewerAccessPolicy {
         "appIntro" to "معرفی برنامه",
         "myRole" to "نقش من",
         "dictionary" to "دیکشنری اصطلاحات تعزیه",
-        "taziehCorrections" to "دیکشنری اصلاحات تعزیه",
+        "taziehCorrections" to "دیکشنری اصلاح و تصحیح متن تعزیه",
         "calendar" to "تقویم محرم",
 
         // مجوزهای فرزند؛ هر قابلیت اصلی والد مستقل است و فرزندان جزئیات واقعی آن را کنترل می‌کنند.
@@ -73,7 +73,7 @@ object ViewerAccessPolicy {
         "myRole.rehearse" to "نقش من: تمرین",
         "myRole.pdf" to "نقش من: خروجی PDF",
         "dictionary.view" to "دیکشنری: مشاهده اصطلاحات",
-        "dictionary.add" to "دیکشنری: افزودن واژه",
+        "dictionary.add" to "دیکشنری اصطلاحات تعزیه: افزودن",
         "dictionary.edit" to "دیکشنری: ویرایش واژه",
         "dictionary.delete" to "دیکشنری: حذف واژه",
         "taziehCorrections.view" to "اصلاحات تعزیه: مشاهده",

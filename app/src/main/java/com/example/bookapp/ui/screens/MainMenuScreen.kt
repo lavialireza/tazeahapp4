@@ -142,7 +142,7 @@ fun MainMenuScreen(
             MenuCard("چه چیزی جدید است؟", null, onOpenChangelog)
             Spacer(Modifier.height(10.dp))
             if (featureEnabled("dictionary.view")) MenuCard("دیکشنری اصطلاحات تعزیه", Icons.AutoMirrored.Filled.MenuBook, onOpenGlossary)
-            if (featureEnabled("taziehCorrections.view")) MenuCard("دیکشنری اصلاحات تعزیه", Icons.AutoMirrored.Filled.MenuBook, onOpenTaziehCorrections)
+            if (featureEnabled("taziehCorrections.view")) MenuCard("دیکشنری اصلاح و تصحیح متن تعزیه", Icons.AutoMirrored.Filled.MenuBook, onOpenTaziehCorrections)
             Spacer(Modifier.height(10.dp))
             if (featureEnabled("calendar.view")) MenuCard("تقویم محرم", null, onOpenMuharramCalendar)
 
