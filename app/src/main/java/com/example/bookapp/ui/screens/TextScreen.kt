@@ -433,6 +433,7 @@ fun TextScreen(
                             added
                         }
                     },
+                    canAddFootnoteToDictionary = canAddFootnoteToDictionary,
                     onJumpToText = { fn ->
                         val idx = content.indexOf(fn.term)
                         if (idx >= 0 && content.isNotBlank() && scrollState.maxValue > 0) {
@@ -680,6 +681,7 @@ private fun FootnotesSection(
     onEdit: (FootnoteEntity, term: String, explanation: String) -> Unit,
     onDelete: (FootnoteEntity) -> Unit,
     onAddToDictionary: (FootnoteEntity) -> Boolean = { false },
+    canAddFootnoteToDictionary: Boolean = true,
     onJumpToText: (FootnoteEntity) -> Unit = {},
     saveError: String? = null
 ) {

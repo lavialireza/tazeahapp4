@@ -33,6 +33,10 @@ private data class PermissionGroup(
     val keys: List<String>
 )
 
+/**
+ * گروه‌ها نقش «والد» دارند و کلیدهای داخل هر گروه «فرزند» هستند.
+ * والد کل فرزندان را یکجا کنترل می‌کند، اما هر فرزند مستقل نیز قابل تنظیم است.
+ */
 private val accessPermissionGroups = listOf(
     PermissionGroup("مطالعه و جستجو", listOf("read", "search", "advancedSearch", "compare", "training")),
     PermissionGroup("رسانه و نمایش", listOf("audio", "tts", "gallery")),
@@ -81,63 +85,55 @@ private fun PermissionGroupEditor(
     val visible = accessPermissionGroups.mapNotNull { group ->
         val items = group.keys.mapNotNull { key -> labels[key]?.let { key to it } }
             .filter { (key, label) ->
-                searchQuery.isBlank() || label.contains(searchQuery, ignoreCase = true) ||
-                    key.contains(searchQuery, ignoreCase = true)
+                searchQuery.isBlank() || label.contains(searchQuery, ignoreCase = true) || key.contains(searchQuery, ignoreCase = true)
             }
         if (items.isEmpty()) null else group to items
     }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         visible.forEach { (group, items) ->
+            val allEnabled = group.keys.all { permissions[it] == true }
+            val anyEnabled = group.keys.any { permissions[it] == true }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp)) {
                     Row(
-                        Modifier.fillMaxWidth().clickable {
-                            expandedGroups = if (group.title in expandedGroups) {
-                                expandedGroups - group.title
-                            } else {
-                                expandedGroups + group.title
-                            }
-                        },
+                        Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(group.title, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "${items.count { permissions[it.first] == true }} از ${items.size} فعال",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                        Column(Modifier.weight(1f).clickable {
+                            expandedGroups = if (group.title in expandedGroups) expandedGroups - group.title else expandedGroups + group.title
+                        }) {
+                            Text("والد: ${group.title}", style = MaterialTheme.typography.titleSmall)
+                            Text("فرزندان فعال: ${group.keys.count { permissions[it] == true }} از ${group.keys.size}", style = MaterialTheme.typography.bodySmall)
                         }
-                        Text(if (group.title in expandedGroups) "▲" else "▼")
+                        Switch(
+                            checked = allEnabled,
+                            onCheckedChange = { value -> onBulkChange(group.keys, value) }
+                        )
                     }
                     if (group.title in expandedGroups) {
-                        Spacer(Modifier.height(6.dp))
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            TextButton(onClick = {
-                                onBulkChange(group.keys.filter { labels.containsKey(it) }, true)
-                            }) { Text("فعال کردن همه") }
-                            TextButton(onClick = {
-                                onBulkChange(group.keys.filter { labels.containsKey(it) }, false)
-                            }) { Text("غیرفعال کردن همه") }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (allEnabled) "همه قابلیت‌های این والد فعال است" else if (anyEnabled) "برخی فرزندان فعال هستند؛ هر فرزند مستقل قابل تنظیم است" else "همه فرزندان این والد غیرفعال هستند",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            TextButton(onClick = { onBulkChange(group.keys, true) }) { Text("فعال کردن همه فرزندان") }
+                            TextButton(onClick = { onBulkChange(group.keys, false) }) { Text("غیرفعال کردن همه فرزندان") }
                         }
                         items.forEach { (key, label) ->
                             Row(
-                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                Modifier.fillMaxWidth().padding(vertical = 2.dp).padding(start = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(label)
+                                    Text("فرزند: $label")
                                     val desc = permissionDescription(key)
                                     if (desc.isNotBlank()) Text(desc, style = MaterialTheme.typography.bodySmall)
                                 }
-                                Switch(
-                                    checked = permissions[key] == true,
-                                    onCheckedChange = { value -> onChange(key, value) }
-                                )
+                                Switch(checked = permissions[key] == true, onCheckedChange = { value -> onChange(key, value) })
                             }
                         }
                     }
