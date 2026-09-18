@@ -37,7 +37,7 @@ private val accessPermissionGroups = listOf(
     PermissionGroup("مطالعه و جستجو", listOf("read", "search", "advancedSearch", "compare", "training")),
     PermissionGroup("رسانه و نمایش", listOf("audio", "tts", "gallery")),
     PermissionGroup("امکانات شخصی", listOf("notes", "bookmarks", "copy", "share")),
-    PermissionGroup("امکانات پژوهشی", listOf("footnotes")),
+    PermissionGroup("امکانات پژوهشی", listOf("footnotes", "footnoteSync")),
     PermissionGroup("خروجی", listOf("pdf")),
     PermissionGroup("اطلاعات برنامه", listOf("appIntro"))
 )
@@ -56,7 +56,8 @@ private fun permissionDescription(key: String): String = when (key) {
     "copy" -> "کپی متن از محتوای Viewer"
     "share" -> "اشتراک‌گذاری محتوای مجاز"
     "pdf" -> "استفاده از خروجی PDF"
-    "footnotes" -> "مشاهده و استفاده از پاورقی‌ها"
+    "footnotes" -> "مشاهده، افزودن و مدیریت پاورقی‌ها"
+    "footnoteSync" -> "افزودن واژه و توضیح پاورقی به دیکشنری؛ مستقل از خود قابلیت پاورقی"
     "appIntro" -> "دسترسی به معرفی و اطلاعات برنامه"
     else -> ""
 }

@@ -1339,6 +1339,7 @@ fun AppNavigation(
                         db.footnoteDao().update(fn.copy(sectionId = id, term = term.trim(), explanation = explanation.trim()))
                     } },
                     onDeleteFootnote = { _, fn -> if (featureEnabled("footnotes")) scope.launch { db.footnoteDao().delete(fn.id) } },
+                    canAddFootnoteToDictionary = featureEnabled("footnoteSync"),
                     fieldTitle = breadcrumb.first,
                     taziehTitle = breadcrumb.second,
                     roleTitle = breadcrumb.third,
@@ -1395,6 +1396,7 @@ fun AppNavigation(
                 relatedSections = relatedSections,
                 onRelatedClick = { related -> navController.navigate("text/${related.sectionId}") },
                 footnotes = if (featureEnabled("footnotes")) footnotes else emptyList(),
+                canAddFootnoteToDictionary = featureEnabled("footnoteSync"),
                 saveError = footnoteError,
                 onAddFootnote = { term, explanation ->
                     if (!featureEnabled("footnotes")) {

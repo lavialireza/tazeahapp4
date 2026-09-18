@@ -71,6 +71,7 @@ fun TextScreen(
     onAddFootnote: suspend (term: String, explanation: String) -> Result<Unit> = { _, _ -> Result.failure(IllegalStateException("ذخیره پاورقی در دسترس نیست")) },
     onEditFootnote: (FootnoteEntity, term: String, explanation: String) -> Unit = { _, _, _ -> },
     onDeleteFootnote: (FootnoteEntity) -> Unit = {},
+    canAddFootnoteToDictionary: Boolean = true,
     onOpenSearch: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     hasPrevSection: Boolean = false,
@@ -423,9 +424,14 @@ fun TextScreen(
                     onEdit = onEditFootnote,
                     onDelete = onDeleteFootnote,
                     onAddToDictionary = { fn ->
-                        val added = com.example.bookapp.data.GlossaryStore.add(context, fn.term, fn.explanation)
-                        statusMessage = if (added) "«${fn.term}» به فرهنگ لغت اضافه شد." else "این واژه قبلاً در فرهنگ لغت وجود دارد."
-                        added
+                        if (!canAddFootnoteToDictionary) {
+                            statusMessage = "انتقال پاورقی به دیکشنری در سیاست دسترسی فعلی غیرفعال است."
+                            false
+                        } else {
+                            val added = com.example.bookapp.data.GlossaryStore.add(context, fn.term, fn.explanation)
+                            statusMessage = if (added) "«${fn.term}» به فرهنگ لغت اضافه شد." else "این واژه قبلاً در فرهنگ لغت وجود دارد."
+                            added
+                        }
                     },
                     onJumpToText = { fn ->
                         val idx = content.indexOf(fn.term)
@@ -774,10 +780,12 @@ private fun FootnotesSection(
                         IconButton(onClick = { onJumpToText(fn) }) {
                             Icon(Icons.Filled.Search, contentDescription = "رفتن به واژه در متن")
                         }
-                        IconButton(onClick = {
-                            onAddToDictionary(fn)
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "افزودن به فرهنگ لغت")
+                        if (canAddFootnoteToDictionary) {
+                            IconButton(onClick = {
+                                onAddToDictionary(fn)
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "افزودن به فرهنگ لغت")
+                            }
                         }
                         IconButton(onClick = { onDelete(fn) }) {
                             Icon(Icons.Filled.Delete, contentDescription = "حذف پاورقی")
@@ -879,6 +887,7 @@ fun TextPagerScreen(
     onAddFootnote: suspend (Long, String, String) -> Result<Unit> = { _, _, _ -> Result.failure(IllegalStateException("ذخیره پاورقی در دسترس نیست")) },
     onEditFootnote: (Long, com.example.bookapp.data.FootnoteEntity, String, String) -> Unit = { _, _, _, _ -> },
     onDeleteFootnote: (Long, com.example.bookapp.data.FootnoteEntity) -> Unit = { _, _ -> },
+    canAddFootnoteToDictionary: Boolean = true,
     fieldTitle: String? = null,
     taziehTitle: String? = null,
     roleTitle: String? = null,
@@ -940,6 +949,7 @@ fun TextPagerScreen(
                     onDeleteFootnote(section.id, fn)
                     pagerScope.launch { pageFootnotes = footnotesForSection(section.id) }
                 },
+                canAddFootnoteToDictionary = canAddFootnoteToDictionary,
                 fieldTitle = fieldTitle,
                 taziehTitle = taziehTitle,
                 roleTitle = roleTitle,

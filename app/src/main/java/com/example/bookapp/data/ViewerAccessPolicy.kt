@@ -30,6 +30,7 @@ object ViewerAccessPolicy {
         "share" to "اشتراک‌گذاری",
         "pdf" to "PDF",
         "footnotes" to "پاورقی",
+        "footnoteSync" to "انتقال پاورقی به دیکشنری",
         "appIntro" to "معرفی برنامه"
     )
 
