@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.bookapp.data.ViewerAccessPolicy
@@ -24,6 +25,116 @@ import java.util.Date
 import java.util.Locale
 import android.content.ClipData
 import androidx.compose.material3.ExperimentalMaterial3Api
+
+
+private data class PermissionGroup(
+    val title: String,
+    val keys: List<String>
+)
+
+private val accessPermissionGroups = listOf(
+    PermissionGroup("مطالعه و جستجو", listOf("read", "search", "advancedSearch", "compare", "training")),
+    PermissionGroup("رسانه و نمایش", listOf("audio", "tts", "gallery")),
+    PermissionGroup("امکانات شخصی", listOf("notes", "bookmarks", "copy", "share")),
+    PermissionGroup("امکانات پژوهشی", listOf("footnotes")),
+    PermissionGroup("خروجی", listOf("pdf")),
+    PermissionGroup("اطلاعات برنامه", listOf("appIntro"))
+)
+
+private fun permissionDescription(key: String): String = when (key) {
+    "read" -> "مشاهده محتوای تعزیه و ورود به بخش‌های مطالعه"
+    "search" -> "استفاده از جستجوی معمولی در محتوای Viewer"
+    "advancedSearch" -> "استفاده از امکانات و فیلترهای پیشرفته جستجو"
+    "compare" -> "دسترسی به مقایسه متون و بخش‌ها"
+    "training" -> "استفاده از حالت تمرین و بازخوانی"
+    "audio" -> "پخش فایل‌های صوتی مرتبط با محتوا"
+    "tts" -> "خواندن متن با تبدیل متن به گفتار"
+    "notes" -> "ایجاد و مدیریت یادداشت‌های شخصی"
+    "bookmarks" -> "افزودن و مشاهده علاقه‌مندی‌ها"
+    "gallery" -> "مشاهده و استفاده از گالری تصاویر"
+    "copy" -> "کپی متن از محتوای Viewer"
+    "share" -> "اشتراک‌گذاری محتوای مجاز"
+    "pdf" -> "استفاده از خروجی PDF"
+    "footnotes" -> "مشاهده و استفاده از پاورقی‌ها"
+    "appIntro" -> "دسترسی به معرفی و اطلاعات برنامه"
+    else -> ""
+}
+
+@Composable
+private fun PermissionGroupEditor(
+    permissions: Map<String, Boolean>,
+    onChange: (String, Boolean) -> Unit,
+    searchQuery: String,
+    compact: Boolean = false
+) {
+    var expanded by remember { mutableStateOf(!compact) }
+    val labels = ViewerAccessPolicy.permissionLabels
+    val visible = accessPermissionGroups.flatMap { group ->
+        val items = group.keys.mapNotNull { key -> labels[key]?.let { key to it } }
+            .filter { (key, label) ->
+                searchQuery.isBlank() || label.contains(searchQuery, ignoreCase = true) ||
+                    key.contains(searchQuery, ignoreCase = true)
+            }
+        if (items.isEmpty()) null else group to items
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        visible.forEach { (group, items) ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(group.title, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "${items.count { permissions[it.first] == true }} از ${items.size} فعال",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Text(if (expanded) "▲" else "▼")
+                    }
+                    if (expanded) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            TextButton(onClick = {
+                                group.keys.forEach { key ->
+                                    if (labels.containsKey(key)) onChange(key, true)
+                                }
+                            }) { Text("فعال کردن همه") }
+                            TextButton(onClick = {
+                                group.keys.forEach { key ->
+                                    if (labels.containsKey(key)) onChange(key, false)
+                                }
+                            }) { Text("غیرفعال کردن همه") }
+                        }
+                        items.forEach { (key, label) ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(label)
+                                    val desc = permissionDescription(key)
+                                    if (desc.isNotBlank()) Text(desc, style = MaterialTheme.typography.bodySmall)
+                                }
+                                Switch(
+                                    checked = permissions[key] == true,
+                                    onCheckedChange = { value -> onChange(key, value) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,6 +155,7 @@ fun ViewerAccessManagementScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var accessTestMessage by remember { mutableStateOf<String?>(null) }
     var exportTarget by remember { mutableStateOf("*") }
+    var permissionSearch by remember { mutableStateOf("") }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.openOutputStream(uri)?.let { ViewerAccessTransfer.writePolicy(context, exportTarget, it) } ?: error("فایل خروجی باز نشد.") }
@@ -97,11 +209,19 @@ fun ViewerAccessManagementScreen(
                         Text("پروفایل عمومی", style = MaterialTheme.typography.titleMedium)
                         Text("این پروفایل برای همه کاربران عمومی است و تغییرات آن در انتشار بروزرسانی بعدی Viewer اعمال می‌شود.", style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(8.dp))
-                        ViewerAccessPolicy.permissionLabels.forEach { (key, label) ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(label); Switch(checked = publicPermissions[key] == true, onCheckedChange = { v -> publicPermissions = publicPermissions + (key to v) })
-                            }
-                        }
+                        OutlinedTextField(
+                            value = permissionSearch,
+                            onValueChange = { permissionSearch = it },
+                            label = { Text("جستجوی دسترسی") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        PermissionGroupEditor(
+                            permissions = publicPermissions,
+                            onChange = { key, value -> publicPermissions = publicPermissions + (key to value) },
+                            searchQuery = permissionSearch
+                        )
                         Button(onClick = { ViewerAccessPolicy.setPublicPermissions(context, publicPermissions); message = "پروفایل عمومی ذخیره شد." }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Save, null); Spacer(Modifier.width(6.dp)); Text("ذخیره پروفایل عمومی") }
                         OutlinedButton(onClick = { exportTarget = "*"; exportLauncher.launch("viewer-access-public.json") }, modifier = Modifier.fillMaxWidth()) { Text("خروجی سیاست عمومی برای Viewer") }
                         Button(onClick = { sendDirectlyToViewer("*") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Send, null); Spacer(Modifier.width(6.dp)); Text("ارسال مستقیم به Viewer") }
@@ -133,9 +253,20 @@ fun ViewerAccessManagementScreen(
                         OutlinedTextField(expiryText, { expiryText = it }, label = { Text("انقضا (YYYY-MM-DD، خالی = بدون انقضا)") }, modifier = Modifier.fillMaxWidth())
                         Spacer(Modifier.height(6.dp))
                         if (profile == ViewerAccessPolicy.PROFILE_CUSTOM) {
-                            ViewerAccessPolicy.permissionLabels.forEach { (key, label) ->
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label); Switch(checked = customPermissions[key] == true, onCheckedChange = { v -> customPermissions = customPermissions + (key to v) }) }
-                            }
+                            Text("مجوزهای اختصاصی", style = MaterialTheme.typography.titleSmall)
+                            PermissionGroupEditor(
+                                permissions = customPermissions,
+                                onChange = { key, value -> customPermissions = customPermissions + (key to value) },
+                                searchQuery = permissionSearch,
+                                compact = true
+                            )
+                        }
+                        if (profile == ViewerAccessPolicy.PROFILE_CUSTOM) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "خلاصه مجوزها: ${customPermissions.count { it.value }} از ${ViewerAccessPolicy.permissionLabels.size} قابلیت فعال",
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = {
