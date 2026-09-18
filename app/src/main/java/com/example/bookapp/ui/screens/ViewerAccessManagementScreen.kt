@@ -69,7 +69,7 @@ private fun PermissionGroupEditor(
 ) {
     var expanded by remember { mutableStateOf(!compact) }
     val labels = ViewerAccessPolicy.permissionLabels
-    val visible = accessPermissionGroups.flatMap { group ->
+    val visible = accessPermissionGroups.mapNotNull { group ->
         val items = group.keys.mapNotNull { key -> labels[key]?.let { key to it } }
             .filter { (key, label) ->
                 searchQuery.isBlank() || label.contains(searchQuery, ignoreCase = true) ||
