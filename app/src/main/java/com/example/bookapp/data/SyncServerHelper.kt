@@ -90,7 +90,7 @@ object SyncServerHelper {
             }
             mergedData.put("syncSource", "android-${if (BuildConfig.PUBLIC_VIEWER) "viewer" else "admin"}")
             mergedData.put("syncUpdatedAt", System.currentTimeMillis())
-            mergedData.put("syncVersion", 2)
+            mergedData.put("syncVersion", 3)
 
             val body = JSONObject().apply {
                 put("deviceId", deviceId(context))
