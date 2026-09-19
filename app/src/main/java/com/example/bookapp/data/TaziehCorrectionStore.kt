@@ -31,7 +31,8 @@ object TaziehCorrectionStore {
         }.getOrDefault(emptyList())
     }
 
-    fun add(context: Context, original: String, corrected: String, explanation: String): Boolean {\n        ViewerContentWriteGuard.check()
+    fun add(context: Context, original: String, corrected: String, explanation: String): Boolean {
+        ViewerContentWriteGuard.check()
         val o = original.trim(); val c = corrected.trim(); val e = explanation.trim()
         if (o.isBlank() || c.isBlank()) return false
         val current = get(context).toMutableList()
@@ -40,7 +41,8 @@ object TaziehCorrectionStore {
         return save(context, current)
     }
 
-    fun update(context: Context, item: Correction, original: String, corrected: String, explanation: String): Boolean {\n        ViewerContentWriteGuard.check()
+    fun update(context: Context, item: Correction, original: String, corrected: String, explanation: String): Boolean {
+        ViewerContentWriteGuard.check()
         val o = original.trim(); val c = corrected.trim(); val e = explanation.trim()
         if (o.isBlank() || c.isBlank()) return false
         val current = get(context).toMutableList()
@@ -51,7 +53,10 @@ object TaziehCorrectionStore {
         return save(context, current)
     }
 
-    fun delete(context: Context, id: Long): Boolean {\n        ViewerContentWriteGuard.check()\n        return save(context, get(context).filterNot { it.id == id })\n    }
+    fun delete(context: Context, id: Long): Boolean {
+        ViewerContentWriteGuard.check()
+        return save(context, get(context).filterNot { it.id == id })
+    }
 
     fun apply(originalText: String, corrections: List<Correction>): String {
         var result = originalText

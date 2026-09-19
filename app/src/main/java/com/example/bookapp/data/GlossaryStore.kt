@@ -28,7 +28,8 @@ object GlossaryStore {
         return get(context).any { normalize(it.first) == normalized }
     }
 
-    fun add(context: Context, term: String, explanation: String): Boolean {\n        ViewerContentWriteGuard.check()
+    fun add(context: Context, term: String, explanation: String): Boolean {
+        ViewerContentWriteGuard.check()
         val cleanTerm = term.trim()
         val cleanExplanation = explanation.trim()
         if (cleanTerm.isBlank() || cleanExplanation.isBlank()) return false
