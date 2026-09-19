@@ -350,7 +350,7 @@ fun SettingsScreen(
                                 val r = onSyncServer()
                                 syncBusy = false
                                 syncResult = r.fold(
-                                    { "همگام‌سازی انجام شد. ${it.uploadedSections} بخش ارسال شد${if (it.pulledNewSections > 0) و " ${it.pulledNewSections} بخش جدید دریافت شد" else ""}." },
+                                    { "همگام‌سازی انجام شد. ${it.uploadedSections} بخش ارسال شد${if (it.pulledNewSections > 0) " و ${it.pulledNewSections} بخش جدید دریافت شد" else ""}." },
                                     { "خطا: ${it.message ?: "اتصال به Sync Server ناموفق بود"}" }
                                 )
                             }
