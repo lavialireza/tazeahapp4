@@ -283,7 +283,7 @@ object SyncServerHelper {
         val o = JSONObject().apply {
             put("uid", uid); put("fileName", label); put("caption", label); put("createdAt", iso(System.currentTimeMillis()))
         }
-        if (kind == "image") put("taziehUid", parentUid) else put("sectionUid", parentUid)
+        if (kind == "image") o.put("taziehUid", parentUid) else o.put("sectionUid", parentUid)
         if (path.startsWith("http://") || path.startsWith("https://")) {
             put(if (kind == "image") "dataUrl" else "audioUrl", path)
         } else {
@@ -390,7 +390,7 @@ object SyncServerHelper {
 
         val activeDays = data.optJSONArray("activeDays") ?: JSONArray()
         val days = (0 until activeDays.length()).mapNotNull { activeDays.optString(it).takeIf(String::isNotBlank) }
-        days.forEach { day -> if (db.userDataDao().getActiveDay(day) == null) { db.userDataDao().insertActiveDay(ActiveDayEntity(day)); pulled++ } }
+        days.forEach { day -> if (db.userDataDao().getActiveDay(day) == null) { db.userDataDao().insertActiveDay(ActiveDayEntity(dayKey = day)); pulled++ } }
         if (days.isNotEmpty()) Prefs.mergeActiveDayValues(context, days.toSet())
 
         val myRoles = data.optJSONArray("myRoles") ?: JSONArray()
