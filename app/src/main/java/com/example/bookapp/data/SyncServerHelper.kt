@@ -285,15 +285,15 @@ object SyncServerHelper {
         }
         if (kind == "image") o.put("taziehUid", parentUid) else o.put("sectionUid", parentUid)
         if (path.startsWith("http://") || path.startsWith("https://")) {
-            put(if (kind == "image") "dataUrl" else "audioUrl", path)
+            o.put(if (kind == "image") "dataUrl" else "audioUrl", path)
         } else {
             val f = File(path)
             if (f.exists() && f.length() > 0) {
                 val mime = if (kind == "image") "image/jpeg" else "audio/mpeg"
                 val encoded = Base64.encodeToString(f.readBytes(), Base64.NO_WRAP)
-                put("dataUrl", "data:$mime;base64,$encoded")
+                o.put("dataUrl", "data:$mime;base64,$encoded")
             } else {
-                put(if (kind == "image") "filePath" else "audioUrl", path)
+                o.put(if (kind == "image") "filePath" else "audioUrl", path)
             }
         }
         return o
