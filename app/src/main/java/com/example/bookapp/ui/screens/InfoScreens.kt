@@ -20,6 +20,7 @@ import com.example.bookapp.data.AppDatabase
 import com.example.bookapp.data.UpdateHelper
 import com.example.bookapp.data.Prefs
 import com.example.bookapp.data.UpdateHistoryStore
+import com.example.bookapp.data.SyncServerHelper
 import kotlinx.coroutines.launch
 
 private const val APP_WEBSITE = "" // آدرس واقعی سایت برنامه را اینجا وارد کنید؛ آدرس مخزن GitHub نباید در معرفی عمومی نمایش داده شود.
@@ -146,6 +147,10 @@ fun SettingsScreen(
     onSyncContent: suspend () -> Result<Unit>,
     onCheckAppUpdate: suspend () -> Result<UpdateHelper.UpdateInfo?> = { Result.success(null) },
     showUpdateManifestTools: Boolean = false,
+    showSyncServerSettings: Boolean = false,
+    syncServerUrl: String = "",
+    onSaveSyncServerUrl: (String) -> Unit = {},
+    onSyncServer: suspend () -> Result<SyncServerHelper.SyncReport> = { Result.failure(IllegalStateException("همگام‌سازی تنظیم نشده است")) },
     db: AppDatabase,
     onBack: () -> Unit
 ) {
@@ -308,6 +313,51 @@ fun SettingsScreen(
                 ThemeOption("طلایی", "default", themeChoice, onThemeChoiceChange, androidx.compose.ui.graphics.Color(0xFFD4A94A))
                 ThemeOption("سبز", "green", themeChoice, onThemeChoiceChange, androidx.compose.ui.graphics.Color(0xFF3E8E5A))
                 ThemeOption("قرمز", "red", themeChoice, onThemeChoiceChange, androidx.compose.ui.graphics.Color(0xFFA33B3B))
+            }
+
+            if (showSyncServerSettings) {
+                Spacer(Modifier.height(24.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(16.dp))
+                Text("همگام‌سازی با لپ‌تاپ / Web", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "آدرس Sync Server را وارد کنید. برنامه بدون فشردن دکمه همگام‌سازی به اینترنت وصل نمی‌شود.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                var serverUrl by remember(syncServerUrl) { mutableStateOf(syncServerUrl) }
+                var syncBusy by remember { mutableStateOf(false) }
+                var syncResult by remember { mutableStateOf<String?>(null) }
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = serverUrl,
+                    onValueChange = { serverUrl = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("آدرس Sync Server") },
+                    placeholder = { Text("http://192.168.1.10:8091") }
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { onSaveSyncServerUrl(serverUrl) }) { Text("ذخیره آدرس") }
+                    OutlinedButton(
+                        enabled = !syncBusy,
+                        onClick = {
+                            syncBusy = true
+                            syncResult = null
+                            scope.launch {
+                                val r = onSyncServer()
+                                syncBusy = false
+                                syncResult = r.fold(
+                                    { "همگام‌سازی انجام شد. ${it.uploadedSections} بخش ارسال شد${if (it.pulledNewSections > 0) و " ${it.pulledNewSections} بخش جدید دریافت شد" else ""}." },
+                                    { "خطا: ${it.message ?: "اتصال به Sync Server ناموفق بود"}" }
+                                )
+                            }
+                        }
+                    ) { Text(if (syncBusy) "در حال همگام‌سازی…" else "همگام‌سازی اکنون") }
+                }
+                syncResult?.let { Text(it, modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
 
             Spacer(Modifier.height(32.dp))

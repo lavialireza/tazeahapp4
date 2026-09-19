@@ -67,6 +67,9 @@ interface RoleDao {
     @Query("SELECT * FROM roles WHERE taziehId = :taziehId ORDER BY orderIndex, id")
     suspend fun getByTazieh(taziehId: Long): List<RoleEntity>
 
+    @Query("SELECT * FROM roles ORDER BY taziehId, orderIndex, id")
+    suspend fun getAllForSync(): List<RoleEntity>
+
     @Query("SELECT * FROM roles WHERE id = :roleId")
     suspend fun getById(roleId: Long): RoleEntity
 

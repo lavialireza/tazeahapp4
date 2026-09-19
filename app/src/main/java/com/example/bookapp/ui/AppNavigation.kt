@@ -478,6 +478,10 @@ fun AppNavigation(
                     result
                 },
                 showUpdateManifestTools = !publicViewer,
+                showSyncServerSettings = !publicViewer,
+                syncServerUrl = com.example.bookapp.data.SyncServerHelper.getServerUrl(context),
+                onSaveSyncServerUrl = { com.example.bookapp.data.SyncServerHelper.setServerUrl(context, it) },
+                onSyncServer = { com.example.bookapp.data.SyncServerHelper.syncContent(context, db) },
                 db = db,
                 onBack = { navController.popBackStack() }
             )
