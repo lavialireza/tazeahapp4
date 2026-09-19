@@ -178,6 +178,9 @@ interface DialogueDao {
     @Query("SELECT * FROM dialogues WHERE taziehId = :taziehId ORDER BY id")
     suspend fun getByTazieh(taziehId: Long): List<DialogueEntity>
 
+    @Query("SELECT * FROM dialogues ORDER BY id")
+    suspend fun getAllForSync(): List<DialogueEntity>
+
     @Query("SELECT * FROM dialogues WHERE id = :dialogueId")
     suspend fun getById(dialogueId: Long): DialogueEntity
 
@@ -222,6 +225,9 @@ interface DialogueTurnDao {
 interface TaziehImageDao {
     @Query("SELECT * FROM tazieh_images WHERE taziehId = :taziehId ORDER BY id")
     suspend fun getByTazieh(taziehId: Long): List<TaziehImageEntity>
+
+    @Query("SELECT * FROM tazieh_images ORDER BY id")
+    suspend fun getAllForSync(): List<TaziehImageEntity>
 
     @Query("SELECT * FROM tazieh_images WHERE uid = :uid LIMIT 1")
     suspend fun getByUid(uid: String): TaziehImageEntity?
