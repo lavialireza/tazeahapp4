@@ -11,14 +11,15 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 /** بررسی دستی بروزرسانی و دریافت APK داخل خود برنامه؛ استفاده عادی برنامه آفلاین باقی می‌ماند. */
 object UpdateHelper {
-    private const val REPO = "lavialireza/taziehappv3"
-    private const val RELEASES_API = "https://api.github.com/repos/$REPO/releases?per_page=20"
     private const val MANIFEST_ASSET = "update.json"
+    private const val MAX_APK_BYTES = 300L * 1024L * 1024L
 
     data class UpdateInfo(
         val buildNumber: Int,
@@ -29,7 +30,8 @@ object UpdateHelper {
         val minSupportedVersion: Int = 0,
         val forceUpdate: Boolean = false,
         val releaseDate: String = "",
-        val releaseNotes: List<String> = emptyList()
+        val releaseNotes: List<String> = emptyList(),
+        val sha256: String = ""
     )
 
     data class InstalledVersion(val buildNumber: Int, val versionName: String)
@@ -42,91 +44,112 @@ object UpdateHelper {
         return InstalledVersion(code, info.versionName ?: "${code}")
     }
 
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun validateSha256(file: File, expected: String) {
+        val normalized = expected.trim().lowercase()
+        require(Regex("^[0-9a-f]{64}$").matches(normalized)) {
+            "شناسه SHA-256 در سرور معتبر نیست؛ بروزرسانی متوقف شد."
+        }
+        val actual = sha256(file)
+        require(actual == normalized) {
+            "صحت فایل APK تأیید نشد (SHA-256 متفاوت است). فایل حذف و بروزرسانی متوقف شد."
+        }
+    }
+
     suspend fun checkForUpdate(currentVersionCode: Int): Result<UpdateInfo?> = withContext(Dispatchers.IO) {
         runCatching {
-            // بروزرسانی کاملاً آنلاین است: هیچ update.json محلی یا فایل واسطه‌ای
-            // برای تشخیص نسخه دانلود نمی‌شود. فقط Release رسمی GitHub بررسی می‌شود.
-            val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
+            // برنامه در حالت عادی آفلاین است. فقط با زدن «بررسی بروزرسانی»
+            // به سرور ثابت همان Flavor وصل می‌شود.
+            val baseUrl = BuildConfig.UPDATE_SERVER_URL.trim().removeSuffix("/")
+            require(baseUrl.startsWith("https://")) {
+                "آدرس سرور بروزرسانی باید با https:// شروع شود. آدرس فعلی: $baseUrl"
+            }
+            val manifestUrl = "$baseUrl/update.json"
+            val connection = (URL(manifestUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 10000
                 readTimeout = 15000
                 instanceFollowRedirects = true
-                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("Accept", "application/json")
                 setRequestProperty("User-Agent", "Tazieh-Android-Updater")
-                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Cache-Control", "no-cache, no-store")
                 setRequestProperty("Pragma", "no-cache")
             }
             try {
                 if (connection.responseCode !in 200..299) {
                     throw IllegalStateException("بررسی بروزرسانی ناموفق بود: ${connection.responseCode}")
                 }
-                val releases = JSONArray(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
-                val viewer = com.example.bookapp.BuildConfig.PUBLIC_VIEWER
-                val preferredNames = if (viewer) {
-                    listOf("app-viewer-release.apk", "app-viewer-debug.apk")
+                require(connection.url.protocol.equals("https", ignoreCase = true)) {
+                    "سرور بروزرسانی به اتصال امن HTTPS منتقل نشد؛ بروزرسانی متوقف شد."
+                }
+                val json = JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                val expectedPackage = if (BuildConfig.PUBLIC_VIEWER) {
+                    "com.example.bookapp.viewer"
                 } else {
-                    listOf("app-admin-release.apk", "app-admin-debug.apk")
+                    "com.example.bookapp"
+                }
+                val manifestPackage = json.optString("packageName", expectedPackage)
+                if (manifestPackage != expectedPackage) {
+                    throw IllegalStateException("این سرور برای نسخه دیگری از برنامه تنظیم شده است.")
                 }
 
-                var best: UpdateInfo? = null
-                for (i in 0 until releases.length()) {
-                    val release = releases.getJSONObject(i)
-                    if (release.optBoolean("draft", false)) continue
+                val expectedAccess = if (BuildConfig.PUBLIC_VIEWER) "viewer" else "admin"
+                val access = json.optString("access", expectedAccess).lowercase()
+                if (access != expectedAccess) {
+                    throw IllegalStateException("سرور بروزرسانی مربوط به ${if (BuildConfig.PUBLIC_VIEWER) "User" else "Admin"} نیست.")
+                }
 
-                    val tag = release.optString("tag_name")
-                    val releaseName = release.optString("name")
-                    val buildNumber = Regex("^apk-build-(\\d+)$").find(tag)
-                        ?.groupValues?.get(1)?.toIntOrNull()
-                        ?: Regex("(?:build|versionCode)[^0-9]*(\\d+)", RegexOption.IGNORE_CASE).find(releaseName)
-                            ?.groupValues?.get(1)?.toIntOrNull()
-                        ?: release.optInt("versionCode", 0).takeIf { it > 0 }
-                        ?: continue
+                val buildNumber = json.optInt("versionCode", 0)
+                if (buildNumber <= 0) throw IllegalStateException("versionCode در update.json معتبر نیست.")
+                if (buildNumber <= currentVersionCode) return@runCatching null
 
-                    if (buildNumber <= currentVersionCode) continue
+                val apkUrlRaw = json.optString("apkUrl").trim()
+                if (apkUrlRaw.isBlank()) {
+                    throw IllegalStateException("در update.json آدرس APK مشخص نشده است.")
+                }
+                val apkUrl = if (apkUrlRaw.startsWith("https://") || apkUrlRaw.startsWith("http://")) {
+                    apkUrlRaw
+                } else {
+                    URL(URL("$baseUrl/"), apkUrlRaw.removePrefix("/")).toString()
+                }
+                require(apkUrl.startsWith("https://")) { "آدرس APK بروزرسانی باید امن (HTTPS) باشد." }
+                val sha256 = json.optString("sha256").trim().lowercase()
+                require(Regex("^[0-9a-f]{64}$").matches(sha256)) {
+                    "در update.json مقدار SHA-256 معتبر برای APK وجود ندارد؛ بروزرسانی متوقف شد."
+                }
 
-                    val assets = release.optJSONArray("assets") ?: continue
-                    var apkUrl: String? = null
-                    var apkName = ""
-                    for (preferred in preferredNames) {
-                        for (j in 0 until assets.length()) {
-                            val asset = assets.getJSONObject(j)
-                            if (asset.optString("name") == preferred) {
-                                apkUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
-                                if (apkUrl != null) {
-                                    apkName = preferred
-                                    break
-                                }
-                            }
-                        }
-                        if (apkUrl != null) break
-                    }
-                    if (apkUrl == null) continue
-
-                    val notes = mutableListOf<String>()
-                    release.optString("body").takeIf { it.isNotBlank() }?.lineSequence()
-                        ?.map { it.trim() }
-                        ?.filter { it.isNotBlank() }
-                        ?.forEach { notes += it.removePrefix("- ").removePrefix("* ") }
-
-                    val publishedAt = release.optString("published_at")
-                    val versionName = release.optString("name").takeIf { it.isNotBlank() } ?: tag
-                    val info = UpdateInfo(
-                        buildNumber = buildNumber,
-                        tagName = tag,
-                        downloadUrl = apkUrl,
-                        isReleaseApk = apkName.endsWith("-release.apk"),
-                        versionName = versionName,
-                        minSupportedVersion = 0,
-                        forceUpdate = false,
-                        releaseDate = publishedAt.take(10),
-                        releaseNotes = notes
-                    )
-                    if (best == null || info.buildNumber > best!!.buildNumber ||
-                        (info.buildNumber == best!!.buildNumber && info.isReleaseApk && !best!!.isReleaseApk)) {
-                        best = info
+                val notes = mutableListOf<String>()
+                val notesArray = json.optJSONArray("releaseNotes")
+                if (notesArray != null) {
+                    for (i in 0 until notesArray.length()) {
+                        notesArray.optString(i).takeIf { it.isNotBlank() }?.let(notes::add)
                     }
                 }
-                best
+
+                UpdateInfo(
+                    buildNumber = buildNumber,
+                    tagName = json.optString("tagName", "server-$buildNumber"),
+                    downloadUrl = apkUrl,
+                    isReleaseApk = true,
+                    versionName = json.optString("versionName", "build$buildNumber"),
+                    minSupportedVersion = json.optInt("minSupportedVersion", 0),
+                    forceUpdate = json.optBoolean("forceUpdate", false),
+                    releaseDate = json.optString("releaseDate", ""),
+                    releaseNotes = notes,
+                    sha256 = sha256
+                )
             } finally {
                 connection.disconnect()
             }
@@ -136,10 +159,12 @@ object UpdateHelper {
     fun createUpdateManifest(context: Context, versionCode: Int, versionName: String, minSupportedVersion: Int, forceUpdate: Boolean, apkFile: String, releaseNotes: List<String>): File {
         val dir = File(context.filesDir, "updates").apply { mkdirs() }
         val file = File(dir, MANIFEST_ASSET)
+        val apk = File(apkFile)
+        val apkSha256 = if (apk.isFile) sha256(apk) else ""
         val json = JSONObject().apply {
             put("appName", if (com.example.bookapp.BuildConfig.PUBLIC_VIEWER) "Tazieh Viewer" else "Tazieh Admin")
             put("versionCode", versionCode); put("versionName", versionName); put("minSupportedVersion", minSupportedVersion)
-            put("forceUpdate", forceUpdate); put("apkFile", apkFile); put("releaseDate", java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()))
+            put("forceUpdate", forceUpdate); put("apkFile", apkFile); put("sha256", apkSha256); put("releaseDate", java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()))
             put("releaseNotes", JSONArray(releaseNotes))
         }
         file.writeText(json.toString(2), Charsets.UTF_8); return file
@@ -171,6 +196,7 @@ object UpdateHelper {
                 }
                 val samePackage = archiveInfo?.packageName == context.packageName
                 if (archiveCode != null && samePackage && archiveCode > installed.buildNumber) {
+                    validateSha256(apkFile, info.sha256)
                     // ملاک نصب، نسخه واقعی داخل خود APK است؛ برچسب Release گیت‌هاب
                     // فقط برای پیدا کردن بروزرسانی استفاده می‌شود و ممکن است با
                     // versionCode داخلی APK قدیمی/متفاوت باشد.
@@ -200,7 +226,11 @@ object UpdateHelper {
                 if (connection.responseCode !in 200..299) {
                     throw IllegalStateException("دریافت APK ناموفق بود: ${connection.responseCode}")
                 }
+                require(connection.url.protocol.equals("https", ignoreCase = true)) {
+                    "دریافت APK به اتصال امن HTTPS منتقل نشد؛ بروزرسانی متوقف شد."
+                }
                 val total = connection.contentLengthLong
+                if (total > MAX_APK_BYTES) throw IllegalStateException("حجم APK بروزرسانی بیش از حد مجاز است.")
                 var received = 0L
                 var lastPercent = -1
                 connection.inputStream.use { input ->
@@ -209,8 +239,11 @@ object UpdateHelper {
                         while (true) {
                             val count = input.read(buffer)
                             if (count < 0) break
-                            output.write(buffer, 0, count)
                             received += count
+                            if (received > MAX_APK_BYTES) {
+                                throw IllegalStateException("حجم APK بروزرسانی بیش از حد مجاز است.")
+                            }
+                            output.write(buffer, 0, count)
                             if (total > 0) {
                                 val percent = ((received * 100L) / total).toInt().coerceIn(0, 100)
                                 if (percent != lastPercent) {
@@ -237,6 +270,8 @@ object UpdateHelper {
             // مهم: شماره tag گیت‌هاب فقط برای پیدا کردن Release است و الزاماً
             // نباید با versionCode داخلی APK مقایسه شود. ملاک نصب فقط این است
             // که APK متعلق به همین package و جدیدتر از نسخه نصب‌شده باشد.
+            validateSha256(apkFile, info.sha256)
+
             val downloadedInfo = context.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
                 ?: throw IllegalStateException("فایل دریافت‌شده یک APK معتبر نیست.")
             val downloadedCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
