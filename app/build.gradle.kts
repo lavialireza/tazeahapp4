@@ -15,8 +15,32 @@ run {
         f.inputStream().use { stream -> localProps.load(stream) }
     }
 }
+val updateServerProps = Properties()
+run {
+    val f = rootProject.file("update-servers.properties")
+    if (f.exists()) {
+        f.inputStream().use { stream -> updateServerProps.load(stream) }
+    }
+}
 fun signingProp(key: String): String? =
     (localProps.getProperty(key) ?: System.getenv(key))?.takeIf { it.isNotBlank() }
+
+// آدرس سرور بروزرسانی برای هر نسخه جداست و بدون تغییر کد Kotlin قابل تغییر است.
+// اولویت: -P هنگام Build، سپس local.properties، و در نهایت مقدار پیش‌فرض.
+fun updateServerProp(key: String, defaultValue: String): String =
+    (providers.gradleProperty(key).orNull
+        ?: localProps.getProperty(key)
+        ?: updateServerProps.getProperty(key)
+        ?: defaultValue).trim().removeSuffix("/")
+
+val adminUpdateServerUrl = updateServerProp(
+    "UPDATE_SERVER_ADMIN_URL",
+    "https://example.com/tazieh/admin"
+)
+val viewerUpdateServerUrl = updateServerProp(
+    "UPDATE_SERVER_VIEWER_URL",
+    "https://example.com/tazieh/user"
+)
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
@@ -31,12 +55,14 @@ android {
             dimension = "access"
             applicationId = "com.example.bookapp"
             buildConfigField("Boolean", "PUBLIC_VIEWER", "false")
+            buildConfigField("String", "UPDATE_SERVER_URL", "\"${adminUpdateServerUrl}\"")
             manifestPlaceholders["appLabel"] = "تعزیه و شبیه‌خوانی — مدیر"
         }
         create("viewer") {
             dimension = "access"
             applicationId = "com.example.bookapp.viewer"
             buildConfigField("Boolean", "PUBLIC_VIEWER", "true")
+            buildConfigField("String", "UPDATE_SERVER_URL", "\"${viewerUpdateServerUrl}\"")
             manifestPlaceholders["appLabel"] = "تعزیه و شبیه‌خوانی"
         }
     }
