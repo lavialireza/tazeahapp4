@@ -180,19 +180,45 @@ object ViewerAccessPolicy {
     }
 
 
-    /** دسترسی مؤثر همین Viewer: کاربر خاص در صورت وجود بر پروفایل عمومی اولویت دارد. */
+    /**
+     * دسترسی مؤثر Viewer.
+     *
+     * نکته امنیتی Stage77: flavor عمومی باید واقعاً برای محتوای اصلی برنامه
+     * فقط خواندنی باشد؛ بنابراین حتی اگر یک فایل سیاست قدیمی/دستی مجوز
+     * ویرایش فرهنگ واژه، اصلاحات، پاورقی یا گالری بدهد، این مجوزها در Viewer
+     * عمومی دوباره مسدود می‌شوند. یادداشت و علاقه‌مندی شخصی همچنان قابل مدیریت
+     * هستند و به محتوای اصلی برنامه دست نمی‌زنند.
+     */
     fun getEffectivePermissions(context: Context): Map<String, Boolean> {
         val id = installationId(context)
         val special = getSpecialUsers(context).firstOrNull { it.installationId == id }
-        if (special != null) {
+        val permissions = if (special != null) {
             // وجود رکورد خاص یعنی این دستگاه صراحتاً مدیریت شده است؛
             // کاربر غیرفعال یا منقضی نباید دوباره به مجوزهای عمومی برگردد.
             if (!special.enabled) return emptyMap()
             val expiry = special.expiresAt
             if (expiry != null && expiry > 0L && System.currentTimeMillis() > expiry) return emptyMap()
-            return normalizedPermissions(special.permissions)
+            normalizedPermissions(special.permissions)
+        } else {
+            normalizedPermissions(getPublicPermissions(context))
+        }.toMutableMap()
+
+        if (BuildConfig.PUBLIC_VIEWER) {
+            // Viewer عمومی: هیچ قابلیت تغییردهنده محتوای اصلی مجاز نیست.
+            val protectedWrites = setOf(
+                "gallery.add", "gallery.edit", "gallery.delete",
+                "footnotes.add", "footnotes.edit", "footnotes.delete",
+                "footnoteSync.dictionary",
+                "dictionary.add", "dictionary.edit", "dictionary.delete",
+                "taziehCorrections.add", "taziehCorrections.edit",
+                "taziehCorrections.delete", "taziehCorrections.apply"
+            )
+            protectedWrites.forEach { key -> permissions[key] = false }
+            // والدها نیز باید خاموش شود؛ وگرنه والد/فرزند می‌تواند رفتار UI را
+            // در نسخه‌های قدیمی‌تر به شکل ناهمسان فعال کند. مشاهده گالری/پاورقی/
+            // دیکشنری/اصلاحات همچنان مجاز می‌ماند.
         }
-        return normalizedPermissions(getPublicPermissions(context))
+        return permissions
     }
 
     fun hasPermission(context: Context, key: String): Boolean {

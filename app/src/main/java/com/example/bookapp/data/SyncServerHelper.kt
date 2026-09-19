@@ -74,17 +74,15 @@ object SyncServerHelper {
             val localState = fullLocalState(context, db)
             val mergedData = JSONObject(remoteData.toString())
 
-            // در نسخه مدیر، محتوای اصلی محلی پس از دریافت نسخه سرور، مبنای ارسال است.
-            // در Viewer، فقط نسخه سرور نگه داشته می‌شود و اطلاعات اصلی از Viewer آپلود نمی‌شود.
+            // Admin می‌تواند محتوای اصلی را منتشر کند؛ Viewer فقط نسخه سرور را
+            // نگه می‌دارد و هیچ‌یک از CONTENT_KEYS را از localState ارسال نمی‌کند.
             if (!BuildConfig.PUBLIC_VIEWER) {
-                mergedData.put("fields", localState.getJSONArray("fields"))
-                mergedData.put("taziehs", localState.getJSONArray("taziehs"))
-                mergedData.put("roles", localState.getJSONArray("roles"))
-                mergedData.put("sections", localState.getJSONArray("sections"))
-                mergedData.put("footnotes", localState.getJSONArray("footnotes"))
+                for (key in CONTENT_KEYS) {
+                    mergedData.put(key, localState.opt(key))
+                }
             }
 
-            // اطلاعات شخصی همیشه قابل اشتراک‌گذاری است تا لپ‌تاپ و گوشی یک دفتر مشترک داشته باشند.
+            // فقط داده‌های شخصی دستگاه بین Viewer/Admin و سرور مشترک می‌شوند.
             for (key in PERSONAL_KEYS) {
                 mergedData.put(key, localState.opt(key))
             }
@@ -118,10 +116,20 @@ object SyncServerHelper {
         }
     }
 
+    /**
+     * داده‌های شخصی دستگاه؛ Viewer فقط همین موارد را می‌تواند به سرور ارسال کند.
+     * محتوای اصلی هرگز از Viewer به سرور برنمی‌گردد.
+     */
     private val PERSONAL_KEYS = listOf(
-        "notes", "bookmarks", "sectionTags", "recentSections", "readingHistory",
-        "myRoles", "activeDays", "dialogues", "dialogueTurns", "images", "audios",
-        "corrections", "glossary"
+        "notes", "bookmarks", "sectionTags", "recentSections",
+        "readingHistory", "myRoles", "activeDays"
+    )
+
+    /** محتوای اصلی که Admin می‌تواند منتشر/همگام کند و Viewer فقط دریافت می‌کند. */
+    private val CONTENT_KEYS = listOf(
+        "fields", "taziehs", "roles", "sections",
+        "footnotes", "dialogues", "dialogueTurns",
+        "images", "audios", "corrections", "glossary"
     )
 
     private fun deviceId(context: Context): String {
