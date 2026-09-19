@@ -56,6 +56,7 @@ android {
             applicationId = "com.example.bookapp"
             buildConfigField("Boolean", "PUBLIC_VIEWER", "false")
             buildConfigField("String", "UPDATE_SERVER_URL", "\"${adminUpdateServerUrl}\"")
+            buildConfigField("String", "SYNC_SERVER_URL", "\"\"")
             manifestPlaceholders["appLabel"] = "تعزیه و شبیه‌خوانی — مدیر"
         }
         create("viewer") {
@@ -63,6 +64,7 @@ android {
             applicationId = "com.example.bookapp.viewer"
             buildConfigField("Boolean", "PUBLIC_VIEWER", "true")
             buildConfigField("String", "UPDATE_SERVER_URL", "\"${viewerUpdateServerUrl}\"")
+            buildConfigField("String", "SYNC_SERVER_URL", "\"\"")
             manifestPlaceholders["appLabel"] = "تعزیه و شبیه‌خوانی"
         }
     }
