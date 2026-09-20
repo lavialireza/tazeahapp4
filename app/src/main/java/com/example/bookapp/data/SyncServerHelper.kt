@@ -73,7 +73,7 @@ object SyncServerHelper {
             if (remoteContent.length() > 0) {
                 val before = db.sectionDao().getAll().size
                 mergeContentFromJson(db, remoteContent.toString(), ContentUid.source("sync-server"), context)
-                SyncMetaStore.captureRemoteState(context, remoteContent)
+                SyncMetaStore.captureRemoteTreeState(context, remoteContent)
                 val after = db.sectionDao().getAll().size
                 pulledSections = (after - before).coerceAtLeast(0)
             }

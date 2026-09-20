@@ -16,6 +16,22 @@ object SyncMetaStore {
     private fun save(context:Context,o:JSONObject){context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString(KEY,o.toString()).apply()}
     fun local(context:Context, collection:String, uid:String, obj:JSONObject, createdAt:String):String { val m=all(context); val k=key(collection,uid); val h=hash(obj); val old=m.optJSONObject(k); val now=System.currentTimeMillis(); val updated=if(old!=null&&old.optString("hash")!=h) iso(now) else old?.optString("updatedAt").takeUnless{it.isNullOrBlank()}?:createdAt.ifBlank{iso(now)}; m.put(k,JSONObject().apply{put("hash",h);put("updatedAt",updated);put("createdAt",createdAt.ifBlank{updated})}); save(context,m); return updated }
     fun captureRemoteState(context:Context, root:JSONObject){ val keys=listOf("fields","taziehs","roles","sections"); for(c in keys){val a=root.optJSONArray(c)?:continue;for(i in 0 until a.length()){val o=a.optJSONObject(i)?:continue;val u=o.optString("uid");if(u.isNotBlank())baseline(context,c,u,o,o.optString("updatedAt"),o.optString("createdAt"))}} }
+    fun captureRemoteTreeState(context: Context, tree: JSONArray) {
+        fun walk(items: JSONArray, collection: String) {
+            for (i in 0 until items.length()) {
+                val o = items.optJSONObject(i) ?: continue
+                val uid = o.optString("uid")
+                if (uid.isNotBlank()) baseline(context, collection, uid, o, o.optString("updatedAt"), o.optString("createdAt"))
+                when (collection) {
+                    "fields" -> walk(o.optJSONArray("taziehs") ?: JSONArray(), "taziehs")
+                    "taziehs" -> walk(o.optJSONArray("roles") ?: JSONArray(), "roles")
+                    "roles" -> walk(o.optJSONArray("sections") ?: JSONArray(), "sections")
+                }
+            }
+        }
+        walk(tree, "fields")
+    }
+
     fun shouldApplyRemote(context:Context, collection:String, uid:String, remoteUpdatedAt:String):Boolean {
         if (uid.isBlank()) return true
         val local = all(context).optJSONObject(key(collection,uid))?.optString("updatedAt").orEmpty()

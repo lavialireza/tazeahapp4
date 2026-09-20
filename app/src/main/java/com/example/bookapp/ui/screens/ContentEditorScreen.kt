@@ -43,6 +43,7 @@ fun ContentEditorScreen(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var fields by remember { mutableStateOf(emptyList<FieldEntity>()) }
     var taziehs by remember { mutableStateOf(emptyList<TaziehEntity>()) }
     var roles by remember { mutableStateOf(emptyList<RoleEntity>()) }
@@ -291,7 +292,6 @@ private suspend fun moveSectionDown(item: SectionEntity, list: List<SectionEntit
     onDismiss: () -> Unit,
     onSave: (String, String, String, Int) -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     var title by remember { mutableStateOf(value?.title.orEmpty()) }
     var editor by remember { mutableStateOf(TextFieldValue(value?.content.orEmpty())) }
     var audio by remember { mutableStateOf(value?.audioUrl.orEmpty()) }
