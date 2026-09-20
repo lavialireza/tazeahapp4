@@ -299,6 +299,7 @@ private suspend fun moveSectionDown(item: SectionEntity, list: List<SectionEntit
     var search by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember { AudioPlayerHelper(context) { state -> isPlaying = state == "started" } }
     DisposableEffect(Unit) { onDispose { player.stop() } }
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
