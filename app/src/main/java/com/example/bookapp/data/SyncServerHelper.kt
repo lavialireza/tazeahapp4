@@ -100,13 +100,22 @@ object SyncServerHelper {
             mergedData.put("syncUpdatedAt", System.currentTimeMillis())
             mergedData.put("syncVersion", 5)
 
+            val requestId = UUID.randomUUID().toString()
             val body = JSONObject().apply {
                 put("deviceId", deviceId(context))
+                put("requestId", requestId)
                 put("data", mergedData)
             }
             val putText = request(context, "PUT", "/api/state", body.toString()).getOrThrow()
             val putRoot = JSONObject(putText)
             val finalData = putRoot.optJSONObject("data") ?: mergedData
+            val backupName = putRoot.optString("backup", "")
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString("last_sync_request_id", putRoot.optString("requestId", requestId))
+                .putString("last_sync_backup", backupName)
+                .putLong("last_sync_at", System.currentTimeMillis())
+                .putString("last_sync_status", "ok")
+                .apply()
 
             // اگر سرور بعد از merge داده‌ای را برگرداند، داده‌های شخصی آن را نیز یک بار
             // دیگر اعمال می‌کنیم تا روی Android باقی بماند.
@@ -127,6 +136,11 @@ object SyncServerHelper {
                 )
             )
         } catch (e: Exception) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putLong("last_sync_at", System.currentTimeMillis())
+                .putString("last_sync_status", "error")
+                .putString("last_sync_error", e.message ?: e.javaClass.simpleName)
+                .apply()
             Result.failure(e)
         }
     }
