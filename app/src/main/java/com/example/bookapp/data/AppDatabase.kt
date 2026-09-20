@@ -243,7 +243,7 @@ private fun withHttpGet(urlString: String): String {
  * A source UID lets us safely remove sections deleted from a particular content file without
  * touching sections supplied by other files.
  */
-internal suspend fun mergeContentFromJson(db: AppDatabase, jsonText: String, sourceUid: String = ContentUid.source(jsonText)) {
+internal suspend fun mergeContentFromJson(db: AppDatabase, jsonText: String, sourceUid: String = ContentUid.source(jsonText), syncContext: Context? = null) {
     val fields = JSONArray(jsonText)
     db.withTransaction {
         for (fi in 0 until fields.length()) {
@@ -251,13 +251,22 @@ internal suspend fun mergeContentFromJson(db: AppDatabase, jsonText: String, sou
             val fieldTitle = fieldObj.getString("title")
             val explicitFieldUid = fieldObj.optString("uid").trim()
             val fieldUid = explicitFieldUid.ifBlank { ContentUid.derived("field", "root", fieldTitle) }
+            val remoteFieldUpdatedAt = fieldObj.optString("updatedAt")
+            val applyField = syncContext == null || SyncMetaStore.shouldApplyRemote(syncContext, "fields", fieldUid, remoteFieldUpdatedAt)
             val existingField = db.fieldDao().getByUid(fieldUid)
                 ?: if (explicitFieldUid.isBlank()) db.fieldDao().getByTitle(fieldTitle) else null
             val fieldId = if (existingField == null) {
-                db.fieldDao().insert(FieldEntity(title = fieldTitle, uid = fieldUid))
+                val insertedId = db.fieldDao().insert(FieldEntity(title = fieldTitle, uid = fieldUid))
+                if (syncContext != null) {
+                    SyncMetaStore.baseline(syncContext, "fields", fieldUid, fieldObj, remoteFieldUpdatedAt, fieldObj.optString("createdAt"))
+                }
+                insertedId
             } else {
-                if (existingField.uid != fieldUid || existingField.title != fieldTitle) {
+                if (applyField && (existingField.uid != fieldUid || existingField.title != fieldTitle)) {
                     db.fieldDao().updateIdentity(existingField.id, fieldTitle, fieldUid)
+                }
+                if (syncContext != null && applyField) {
+                    SyncMetaStore.baseline(syncContext, "fields", fieldUid, fieldObj, remoteFieldUpdatedAt, fieldObj.optString("createdAt"))
                 }
                 existingField.id
             }
@@ -268,20 +277,29 @@ internal suspend fun mergeContentFromJson(db: AppDatabase, jsonText: String, sou
                 val taziehTitle = taziehObj.getString("title")
                 val explicitTaziehUid = taziehObj.optString("uid").trim()
                 val taziehUid = explicitTaziehUid.ifBlank { ContentUid.derived("tazieh", fieldUid, taziehTitle) }
+                val remoteTaziehUpdatedAt = taziehObj.optString("updatedAt")
+                val applyTazieh = syncContext == null || SyncMetaStore.shouldApplyRemote(syncContext, "taziehs", taziehUid, remoteTaziehUpdatedAt)
                 val existingTazieh = db.taziehDao().getByUid(taziehUid)
                     ?: if (explicitTaziehUid.isBlank()) db.taziehDao().getByTitle(fieldId, taziehTitle) else null
                 val taziehId = if (existingTazieh == null) {
-                    db.taziehDao().insert(TaziehEntity(fieldId = fieldId, title = taziehTitle, uid = taziehUid))
+                    val insertedId = db.taziehDao().insert(TaziehEntity(fieldId = fieldId, title = taziehTitle, uid = taziehUid))
+                    if (syncContext != null) {
+                        SyncMetaStore.baseline(syncContext, "taziehs", taziehUid, taziehObj, remoteTaziehUpdatedAt, taziehObj.optString("createdAt"))
+                    }
+                    insertedId
                 } else {
-                    if (existingTazieh.uid != taziehUid || existingTazieh.title != taziehTitle) {
+                    if (applyTazieh && (existingTazieh.uid != taziehUid || existingTazieh.title != taziehTitle)) {
                         db.taziehDao().updateIdentity(existingTazieh.id, fieldId, taziehTitle, taziehUid)
+                    }
+                    if (syncContext != null && applyTazieh) {
+                        SyncMetaStore.baseline(syncContext, "taziehs", taziehUid, taziehObj, remoteTaziehUpdatedAt, taziehObj.optString("createdAt"))
                     }
                     existingTazieh.id
                 }
 
                 val author = taziehObj.optString("author", "").ifBlank { null }
                 val authorEmail = taziehObj.optString("authorEmail", "").ifBlank { null }
-                if (author != null || authorEmail != null) {
+                if (applyTazieh && (author != null || authorEmail != null)) {
                     db.taziehDao().updateAuthor(
                         taziehId,
                         author ?: existingTazieh?.author,
@@ -295,13 +313,24 @@ internal suspend fun mergeContentFromJson(db: AppDatabase, jsonText: String, sou
                     val roleTitle = roleObj.getString("title")
                     val explicitRoleUid = roleObj.optString("uid").trim()
                     val roleUid = explicitRoleUid.ifBlank { ContentUid.derived("role", taziehUid, roleTitle) }
+                    val remoteRoleUpdatedAt = roleObj.optString("updatedAt")
+                    val applyRole = syncContext == null || SyncMetaStore.shouldApplyRemote(syncContext, "roles", roleUid, remoteRoleUpdatedAt)
                     val roleOrder = ri
                     val existingRole = db.roleDao().getByUid(roleUid)
                         ?: if (explicitRoleUid.isBlank()) db.roleDao().getByTitle(taziehId, roleTitle) else null
                     val roleId = if (existingRole == null) {
-                        db.roleDao().insert(RoleEntity(taziehId = taziehId, title = roleTitle, orderIndex = roleOrder, uid = roleUid))
+                        val insertedId = db.roleDao().insert(RoleEntity(taziehId = taziehId, title = roleTitle, orderIndex = roleOrder, uid = roleUid))
+                        if (syncContext != null) {
+                            SyncMetaStore.baseline(syncContext, "roles", roleUid, roleObj, remoteRoleUpdatedAt, roleObj.optString("createdAt"))
+                        }
+                        insertedId
                     } else {
-                        db.roleDao().updateFromContent(existingRole.id, taziehId, roleTitle, roleOrder, roleUid)
+                        if (applyRole) {
+                            db.roleDao().updateFromContent(existingRole.id, taziehId, roleTitle, roleOrder, roleUid)
+                        }
+                        if (syncContext != null && applyRole) {
+                            SyncMetaStore.baseline(syncContext, "roles", roleUid, roleObj, remoteRoleUpdatedAt, roleObj.optString("createdAt"))
+                        }
                         existingRole.id
                     }
 
@@ -316,12 +345,14 @@ internal suspend fun mergeContentFromJson(db: AppDatabase, jsonText: String, sou
                         }
                         val newContent = secObj.getString("content")
                         val newAudio = secObj.optString("audio", "").ifBlank { null }
+                        val remoteSectionUpdatedAt = secObj.optString("updatedAt")
+                        val applySection = syncContext == null || SyncMetaStore.shouldApplyRemote(syncContext, "sections", sectionUid, remoteSectionUpdatedAt)
                         seenSectionUids += sectionUid
 
                         val existingSection = db.sectionDao().getByUid(sectionUid)
                             ?: if (explicitSectionUid.isBlank()) db.sectionDao().getByTitle(roleId, sectionTitle) else null
                         if (existingSection == null) {
-                            db.sectionDao().insert(
+                            val insertedId = db.sectionDao().insert(
                                 SectionEntity(
                                     roleId = roleId,
                                     orderIndex = si,
@@ -332,24 +363,35 @@ internal suspend fun mergeContentFromJson(db: AppDatabase, jsonText: String, sou
                                     sourceUid = sourceUid
                                 )
                             )
+                            if (syncContext != null) {
+                                SyncMetaStore.baseline(syncContext, "sections", sectionUid, secObj, remoteSectionUpdatedAt, secObj.optString("createdAt"))
+                            }
+                            insertedId
                         } else {
-                            db.sectionDao().updateFromContent(
-                                id = existingSection.id,
-                                roleId = roleId,
-                                title = sectionTitle,
-                                content = newContent,
-                                audioUrl = newAudio ?: existingSection.audioUrl,
-                                orderIndex = si,
-                                uid = sectionUid,
-                                sourceUid = sourceUid
-                            )
+                            if (applySection) {
+                                db.sectionDao().updateFromContent(
+                                    id = existingSection.id,
+                                    roleId = roleId,
+                                    title = sectionTitle,
+                                    content = newContent,
+                                    audioUrl = newAudio ?: existingSection.audioUrl,
+                                    orderIndex = si,
+                                    uid = sectionUid,
+                                    sourceUid = sourceUid
+                                )
+                                if (syncContext != null) {
+                                    SyncMetaStore.baseline(syncContext, "sections", sectionUid, secObj, remoteSectionUpdatedAt, secObj.optString("createdAt"))
+                                }
+                            }
                         }
                     }
 
                     // Only sections owned by this source are candidates for removal.
-                    db.sectionDao().getBySourceAndRole(sourceUid, roleId)
-                        .filter { it.uid !in seenSectionUids }
-                        .forEach { db.sectionDao().delete(it.id) }
+                    if (syncContext == null) {
+                        db.sectionDao().getBySourceAndRole(sourceUid, roleId)
+                            .filter { it.uid !in seenSectionUids }
+                            .forEach { db.sectionDao().delete(it.id) }
+                    }
                 }
             }
         }

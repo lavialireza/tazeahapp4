@@ -55,15 +55,25 @@ object SyncServerHelper {
         if (base.isBlank()) return@withContext Result.failure(IllegalStateException("ابتدا آدرس Sync Server را وارد کنید."))
 
         try {
+            // Establish a local baseline before pulling remote data so stale remote
+            // edits can be rejected deterministically.
+            fullLocalState(context, db)
             val remoteText = request(context, "GET", "/api/state", null).getOrThrow()
             val remoteRoot = JSONObject(remoteText)
             val remoteData = remoteRoot.optJSONObject("data") ?: JSONObject()
+
+            val remoteTombstones = remoteData.optJSONArray("tombstones") ?: JSONArray()
+            if (remoteTombstones.length() > 0) {
+                TombstoneStore.applyRemote(context, remoteTombstones)
+                applyRemoteTombstones(db, remoteTombstones, context)
+            }
 
             var pulledSections = 0
             val remoteContent = remoteContentToJson(remoteData)
             if (remoteContent.length() > 0) {
                 val before = db.sectionDao().getAll().size
-                mergeContentFromJson(db, remoteContent.toString(), ContentUid.source("sync-server"))
+                mergeContentFromJson(db, remoteContent.toString(), ContentUid.source("sync-server"), context)
+                SyncMetaStore.captureRemoteState(context, remoteContent)
                 val after = db.sectionDao().getAll().size
                 pulledSections = (after - before).coerceAtLeast(0)
             }
@@ -88,7 +98,7 @@ object SyncServerHelper {
             }
             mergedData.put("syncSource", "android-${if (BuildConfig.PUBLIC_VIEWER) "viewer" else "admin"}")
             mergedData.put("syncUpdatedAt", System.currentTimeMillis())
-            mergedData.put("syncVersion", 3)
+            mergedData.put("syncVersion", 5)
 
             val body = JSONObject().apply {
                 put("deviceId", deviceId(context))
@@ -101,6 +111,11 @@ object SyncServerHelper {
             // اگر سرور بعد از merge داده‌ای را برگرداند، داده‌های شخصی آن را نیز یک بار
             // دیگر اعمال می‌کنیم تا روی Android باقی بماند.
             mergeRemoteUserState(context, db, finalData)
+            val finalTombstones = finalData.optJSONArray("tombstones") ?: JSONArray()
+            if (finalTombstones.length() > 0) {
+                TombstoneStore.applyRemote(context, finalTombstones)
+                applyRemoteTombstones(db, finalTombstones, context)
+            }
 
             Result.success(
                 SyncReport(
@@ -168,35 +183,36 @@ object SyncServerHelper {
     }
 
     private suspend fun fullLocalState(context: Context, db: AppDatabase): JSONObject {
-        val state = contentState(db)
+        val state = contentState(context, db)
         putPersonalState(context, db, state)
         return state
     }
 
-    private suspend fun contentState(db: AppDatabase): JSONObject {
+    private suspend fun contentState(context: Context, db: AppDatabase): JSONObject {
         val fields = db.fieldDao().getAll()
         val taziehs = db.taziehDao().getAll()
         val roles = db.roleDao().getAllForSync()
         val sections = db.sectionDao().getAll()
         return JSONObject().apply {
             put("fields", JSONArray().also { a -> fields.forEach { f ->
-                a.put(JSONObject().apply { put("id", f.id); put("uid", f.uid); put("title", f.title) })
+                a.put(JSONObject().apply { put("id", f.id); put("uid", f.uid); put("title", f.title) }.let { o -> o.put("createdAt", ""); o.put("updatedAt", SyncMetaStore.local(context, "fields", f.uid, o, "")); o })
             } })
             put("taziehs", JSONArray().also { a -> taziehs.forEach { t ->
                 a.put(JSONObject().apply {
                     put("id", t.id); put("uid", t.uid); put("fieldId", t.fieldId)
                     put("title", t.title); put("author", t.author ?: ""); put("authorEmail", t.authorEmail ?: "")
-                })
+                }.let { o -> o.put("createdAt", ""); o.put("updatedAt", SyncMetaStore.local(context, "taziehs", t.uid, o, "")); o })
             } })
             put("roles", JSONArray().also { a -> roles.forEach { r ->
-                a.put(JSONObject().apply { put("id", r.id); put("uid", r.uid); put("taziehId", r.taziehId); put("title", r.title); put("orderIndex", r.orderIndex) })
+                a.put(JSONObject().apply { put("id", r.id); put("uid", r.uid); put("taziehId", r.taziehId); put("title", r.title); put("orderIndex", r.orderIndex) }.let { o -> o.put("createdAt", ""); o.put("updatedAt", SyncMetaStore.local(context, "roles", r.uid, o, "")); o })
             } })
             put("sections", JSONArray().also { a -> sections.forEach { s ->
                 a.put(JSONObject().apply {
                     put("id", s.id); put("uid", s.uid); put("roleId", s.roleId); put("title", s.title)
                     put("content", s.content); put("audioUrl", s.audioUrl ?: ""); put("orderIndex", s.orderIndex); put("sourceUid", s.sourceUid)
-                })
+                }.let { o -> o.put("createdAt", ""); o.put("updatedAt", SyncMetaStore.local(context, "sections", s.uid, o, "")); o })
             } })
+            put("tombstones", TombstoneStore.all(context))
         }
     }
 
@@ -510,6 +526,25 @@ object SyncServerHelper {
         return MergeUserReport(pulled)
     }
 
+    private suspend fun applyRemoteTombstones(db: AppDatabase, arr: JSONArray, context: Context) {
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            if (!o.optBoolean("deleted", true)) continue
+            val uid = o.optString("uid").trim()
+            val collection = o.optString("collection")
+            val remoteUpdatedAt = o.optString("updatedAt")
+            if (!SyncMetaStore.shouldApplyRemote(context, collection, uid, remoteUpdatedAt)) continue
+            when (collection) {
+                "fields" -> db.fieldDao().getByUid(uid)?.let { db.fieldDao().delete(it.id) }
+                "taziehs" -> db.taziehDao().getByUid(uid)?.let { db.taziehDao().delete(it.id) }
+                "roles" -> db.roleDao().getByUid(uid)?.let { db.roleDao().delete(it.id) }
+                "sections" -> db.sectionDao().getByUid(uid)?.let { db.sectionDao().delete(it.id) }
+                "footnotes" -> db.footnoteDao().getByUid(uid)?.let { db.footnoteDao().delete(it.id) }
+                "images" -> db.taziehImageDao().getByUid(uid)?.let { db.taziehImageDao().delete(it.id) }
+            }
+        }
+    }
+
     private fun materializeMedia(context: Context, dataUrl: String, folder: String, suffix: String): String? {
         if (!dataUrl.startsWith("data:")) return null
         return runCatching {
@@ -548,22 +583,22 @@ object SyncServerHelper {
         val out = JSONArray()
         for (fi in 0 until fields.length()) {
             val f = fields.optJSONObject(fi) ?: continue
-            val fo = JSONObject().apply { put("title", f.optString("title")); f.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) } }
+            val fo = JSONObject().apply { put("title", f.optString("title")); f.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) }; put("createdAt", f.optString("createdAt")); put("updatedAt", f.optString("updatedAt")) }
             val ta = JSONArray()
             for (ti in 0 until taziehs.length()) {
                 val t = taziehs.optJSONObject(ti) ?: continue
                 if (t.optString("fieldId") != f.optString("id")) continue
-                val to = JSONObject().apply { put("title", t.optString("title")); t.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) } }
+                val to = JSONObject().apply { put("title", t.optString("title")); t.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) }; put("createdAt", t.optString("createdAt")); put("updatedAt", t.optString("updatedAt")); put("author", t.optString("author", "")); put("authorEmail", t.optString("authorEmail", "")) }
                 val ra = JSONArray()
                 for (ri in 0 until roles.length()) {
                     val r = roles.optJSONObject(ri) ?: continue
                     if (r.optString("taziehId") != t.optString("id")) continue
-                    val ro = JSONObject().apply { put("title", r.optString("title")); r.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) } }
+                    val ro = JSONObject().apply { put("title", r.optString("title")); r.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) }; put("createdAt", r.optString("createdAt")); put("updatedAt", r.optString("updatedAt")); put("orderIndex", r.optInt("orderIndex", ri)) }
                     val sa = JSONArray()
                     for (si in 0 until sections.length()) {
                         val s = sections.optJSONObject(si) ?: continue
                         if (s.optString("roleId") != r.optString("id")) continue
-                        sa.put(JSONObject().apply { put("title", s.optString("title")); put("content", s.optString("content")); s.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) } })
+                        sa.put(JSONObject().apply { put("title", s.optString("title")); put("content", s.optString("content")); put("audio", s.optString("audioUrl", "")); s.optString("uid").takeIf { it.isNotBlank() }?.let { put("uid", it) }; put("createdAt", s.optString("createdAt")); put("updatedAt", s.optString("updatedAt")) })
                     }
                     ro.put("sections", sa); ra.put(ro)
                 }
