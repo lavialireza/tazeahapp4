@@ -29,6 +29,7 @@ import java.util.UUID
 object SyncServerHelper {
     private const val PREFS = "tazieh_sync"
     private const val KEY_URL = "server_url"
+    private const val KEY_TOKEN = "server_token"
     private const val DEFAULT_TIMEOUT = 20000
     private const val DATA_PREFIX_IMAGE = "data:image/jpeg;base64,"
     private const val DATA_PREFIX_AUDIO = "data:audio/mpeg;base64,"
@@ -37,6 +38,12 @@ object SyncServerHelper {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_URL, BuildConfig.SYNC_SERVER_URL)?.trim()?.removeSuffix("/").orEmpty()
 
+    fun getServerToken(context: Context): String = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_TOKEN, "").orEmpty()
+
+    fun setServerToken(context: Context, value: String) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_TOKEN, value.trim()).apply() }
+
+    fun pendingSyncCount(context: Context): Int = OfflineSyncQueue.size(context)
+
     fun setServerUrl(context: Context, value: String) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(KEY_URL, value.trim().removeSuffix("/")).apply()
@@ -44,6 +51,21 @@ object SyncServerHelper {
 
     suspend fun check(context: Context): Result<String> = withContext(Dispatchers.IO) {
         request(context, "GET", "/api/health", null)
+    }
+
+    /** بررسی سلامت و یکپارچگی state روی Sync Server بدون تغییر داده. */
+    suspend fun checkIntegrity(context: Context): Result<String> = withContext(Dispatchers.IO) {
+        val result = request(context, "GET", "/api/diagnostics", null)
+        result.onSuccess { text ->
+            runCatching {
+                val root = JSONObject(text)
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putString("last_server_state_hash", root.optString("stateHash", ""))
+                    .putLong("last_integrity_check_at", System.currentTimeMillis())
+                    .apply()
+            }
+        }
+        result
     }
 
     /**
@@ -55,6 +77,8 @@ object SyncServerHelper {
         if (base.isBlank()) return@withContext Result.failure(IllegalStateException("ابتدا آدرس Sync Server را وارد کنید."))
 
         try {
+            // First flush the oldest persisted offline request. The same requestId is reused safely.
+            if (!flushPending(context)) throw IllegalStateException("تغییرات در صف آفلاین باقی مانده‌اند؛ پس از اتصال دوباره تلاش کنید.")
             // Establish a local baseline before pulling remote data so stale remote
             // edits can be rejected deterministically.
             fullLocalState(context, db)
@@ -106,7 +130,16 @@ object SyncServerHelper {
                 put("requestId", requestId)
                 put("data", mergedData)
             }
-            val putText = request(context, "PUT", "/api/state", body.toString()).getOrThrow()
+            val bodyText = body.toString()
+            val putResult = requestWithRetry(context, "PUT", "/api/state", bodyText, 3)
+            if (putResult.isFailure) {
+                OfflineSyncQueue.enqueue(context, deviceId(context), bodyText, requestId)
+                SyncAuditStore.add(context, "queued", mapOf("requestId" to requestId))
+                throw putResult.exceptionOrNull() ?: IllegalStateException("Sync failed and was queued")
+            }
+            val putText = putResult.getOrThrow()
+            OfflineSyncQueue.remove(context, requestId)
+            SyncAuditStore.add(context, "success", mapOf("requestId" to requestId, "deviceId" to deviceId(context)))
             val putRoot = JSONObject(putText)
             val finalData = putRoot.optJSONObject("data") ?: mergedData
             val backupName = putRoot.optString("backup", "")
@@ -140,6 +173,7 @@ object SyncServerHelper {
                 .putLong("last_sync_at", System.currentTimeMillis())
                 .putString("last_sync_status", "error")
                 .putString("last_sync_error", e.message ?: e.javaClass.simpleName)
+                .putInt("pending_sync_count", OfflineSyncQueue.size(context))
                 .apply()
             Result.failure(e)
         }
@@ -168,6 +202,16 @@ object SyncServerHelper {
         }
     }
 
+    private suspend fun requestWithRetry(context: Context, method: String, path: String, body: String?, attempts: Int): Result<String> {
+        var last: Result<String> = Result.failure(IllegalStateException("Sync request failed"))
+        repeat(attempts.coerceAtLeast(1)) { index ->
+            last = request(context, method, path, body)
+            if (last.isSuccess) return last
+            if (index + 1 < attempts) kotlinx.coroutines.delay(500L * (index + 1))
+        }
+        return last
+    }
+
     private fun request(context: Context, method: String, path: String, body: String?): Result<String> {
         val base = getServerUrl(context)
         if (base.isBlank()) return Result.failure(IllegalStateException("آدرس Sync Server تنظیم نشده است."))
@@ -177,6 +221,7 @@ object SyncServerHelper {
                 readTimeout = DEFAULT_TIMEOUT
                 requestMethod = method
                 setRequestProperty("Accept", "application/json")
+                getServerToken(context).takeIf { it.isNotBlank() }?.let { setRequestProperty("X-Tazieh-Sync-Token", it) }
                 if (body != null) {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -193,6 +238,16 @@ object SyncServerHelper {
             } finally {
                 c.disconnect()
             }
+        }
+    }
+
+    private suspend fun flushPending(context: Context): Boolean {
+        while (true) {
+            val item = OfflineSyncQueue.peek(context) ?: return true
+            OfflineSyncQueue.markAttempt(context, item.requestId)
+            val result = requestWithRetry(context, "PUT", "/api/state", item.body, 3)
+            if (result.isSuccess) { OfflineSyncQueue.remove(context, item.requestId); SyncAuditStore.add(context,"queued-flushed",mapOf("requestId" to item.requestId)); continue }
+            return false
         }
     }
 
