@@ -5,3 +5,6 @@
 - ContentEditorScreen.kt: Context قبل از استفاده در حذف Tombstone تعریف شد.
 - این اصلاحات برای رفع خطاهای کامپایل گزارش‌شده در logs_96149579313.zip اعمال شدند.
 - این محیط ابزار Gradle/Android SDK کامل برای اجرای APK ندارد؛ بنابراین APK نهایی ادعا نمی‌شود مگر Build خارجی موفق شود.
+
+
+FIX2: رفع خطای Unresolved reference: context در SectionDialog؛ LocalContext به Scope صحیح منتقل شد.
